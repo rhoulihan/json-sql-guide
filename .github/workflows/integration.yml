@@ -1,0 +1,64 @@
+name: Integration
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Integration tests (Oracle 26ai)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      oracle:
+        image: container-registry.oracle.com/database/free:26ai
+        env:
+          ORACLE_PWD: validator
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --shm-size=1g
+          --health-cmd "echo exit | sqlplus -L validator/validator@//localhost:1521/FREEPDB1 | grep -q Connected"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 20
+          --health-start-period 120s
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Wait for Oracle healthy
+        run: |
+          echo "Waiting for Oracle to become healthy..."
+          for i in {1..40}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' "${{ job.services.oracle.id }}" 2>/dev/null || echo "starting")
+            echo "attempt $i: $status"
+            if [ "$status" = "healthy" ]; then
+              echo "Oracle is healthy."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Oracle did not become healthy in time."
+          exit 1
+      - name: pytest integration
+        env:
+          ORACLE_HOST: localhost
+          ORACLE_PORT: "1521"
+          ORACLE_SERVICE: FREEPDB1
+          ORACLE_USER: validator
+          ORACLE_PASSWORD: validator
+        run: uv run pytest tests/integration -v -m requires_oracle
