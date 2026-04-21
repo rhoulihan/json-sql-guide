@@ -97,6 +97,7 @@ disallow_untyped_defs = false
 # ───────── pytest ─────────
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src", "."]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "integration: marks tests requiring a live Oracle database",
@@ -110,6 +111,7 @@ source = ["src/validator"]
 branch = true
 omit = [
     "src/validator/cli.py",  # CLI integration tested via subprocess in integration/
+    "src/validator/fixture.py",  # FixtureLoader tested in integration/test_fixture.py
 ]
 
 [tool.coverage.report]
