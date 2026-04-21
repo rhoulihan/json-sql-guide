@@ -33,6 +33,20 @@ def _directed(sql: str, wrap_as: str | None = None) -> DirectedSnippet:
     )
 
 
+def _first_statement_line(executable_sql: str) -> str:
+    """Return the first non-comment, non-blank line of an executable block.
+
+    Skips the leading ``-- wrapped from …`` diagnostic comment and any
+    other leading comment or blank lines, then returns the next line.
+    """
+    for line in executable_sql.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue
+        return stripped
+    raise AssertionError(f"no executable line found in {executable_sql!r}")
+
+
 # ───────── 1 — WHERE fragment has a registered wrap ─────────
 
 
@@ -51,9 +65,10 @@ def test_wrap_registry_applies_template_to_produce_executable_sql() -> None:
     directed = _directed("WHERE o.order_id > 100")
     wrapped = wrap(directed)
     assert "WHERE o.order_id > 100" in wrapped.executable_sql
-    # The wrapped SQL should be syntactically executable (starts with SELECT/INSERT/etc).
-    first_token = wrapped.executable_sql.strip().split()[0].upper()
-    assert first_token == "SELECT"
+    # The wrapped SQL should be syntactically executable (starts with SELECT/INSERT/etc
+    # after any leading `-- wrapped from …` diagnostic comment).
+    first_stmt_line = _first_statement_line(wrapped.executable_sql)
+    assert first_stmt_line.split()[0].upper() == "SELECT"
 
 
 # ───────── 3 — @wrap-as directive beats registry default ─────────
@@ -65,7 +80,11 @@ def test_wrap_registry_falls_through_to_explicit_wrap_as_directive_when_provided
         wrap_as="SELECT 1 FROM orders o WHERE %s",
     )
     wrapped = wrap(directed)
-    assert wrapped.executable_sql == "SELECT 1 FROM orders o WHERE JSON_EXISTS(o.order_doc, '$.x')"
+    # The final executable SQL (after stripping the diagnostic comment line)
+    # should exactly match the substituted template.
+    assert _first_statement_line(wrapped.executable_sql) == (
+        "SELECT 1 FROM orders o WHERE JSON_EXISTS(o.order_doc, '$.x')"
+    )
     assert wrapped.shape is FragmentShape.DIRECTIVE_OVERRIDE
 
 
@@ -140,7 +159,7 @@ def test_wrap_registry_is_extensible_via_register_wrapper_function() -> None:
         assert wrapped.shape is FragmentShape.CUSTOM
     finally:
         # Clean up so later tests don't see the custom shape.
-        from validator.wraps import _unregister  # type: ignore[attr-defined]
+        from validator.wraps import _unregister
 
         _unregister(FragmentShape.CUSTOM)
 
@@ -161,7 +180,7 @@ def test_wrapped_sql_parses_as_valid_oracle_sql_no_execution() -> None:
     ):
         directed = _directed(fragment)
         wrapped = wrap(directed)
-        first_token = wrapped.executable_sql.strip().split()[0].upper()
+        first_token = _first_statement_line(wrapped.executable_sql).split()[0].upper()
         assert first_token in {"SELECT", "WITH"}, fragment
         assert "%s" not in wrapped.executable_sql, fragment
 
