@@ -61,7 +61,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["N802", "N803"]  # test function names may be long
+"tests/**/*.py" = [
+    "N802",  # function name may be long for descriptive tests
+    "N803",  # arg name may shadow stdlib for fixtures
+    "TC003", # type-checking imports stay at module level for test readability
+]
 
 [tool.ruff.format]
 quote-style = "double"

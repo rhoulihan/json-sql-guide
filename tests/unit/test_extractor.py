@@ -21,8 +21,8 @@ from validator.extractor import (
     extract_file,
 )
 
-
 # ───────── 1 — empty input yields empty catalog ─────────
+
 
 def test_extractor_returns_empty_catalog_for_markdown_without_sql_fences() -> None:
     md = dedent(
@@ -38,6 +38,7 @@ def test_extractor_returns_empty_catalog_for_markdown_without_sql_fences() -> No
 
 
 # ───────── 2 — single block is captured ─────────
+
 
 def test_extractor_finds_single_sql_block() -> None:
     md = dedent(
@@ -56,16 +57,17 @@ def test_extractor_finds_single_sql_block() -> None:
 
 # ───────── 3 — opening fence line number is recorded ─────────
 
+
 def test_extractor_records_line_number_of_opening_fence() -> None:
     md = "\n".join(
         [
-            "# Heading",      # line 1
-            "",               # line 2
-            "prose here",     # line 3
-            "",               # line 4
-            "```sql",         # line 5  <- opener
-            "SELECT 1;",      # line 6
-            "```",            # line 7
+            "# Heading",  # line 1
+            "",  # line 2
+            "prose here",  # line 3
+            "",  # line 4
+            "```sql",  # line 5  <- opener
+            "SELECT 1;",  # line 6
+            "```",  # line 7
         ]
     )
     snippets = extract(md)
@@ -74,6 +76,7 @@ def test_extractor_records_line_number_of_opening_fence() -> None:
 
 
 # ───────── 4 — section from preceding H2 ─────────
+
 
 def test_extractor_captures_current_section_from_preceding_h2() -> None:
     md = dedent(
@@ -97,6 +100,7 @@ def test_extractor_captures_current_section_from_preceding_h2() -> None:
 
 # ───────── 5 — subsection from preceding H3 ─────────
 
+
 def test_extractor_captures_current_subsection_from_preceding_h3() -> None:
     md = dedent(
         """\
@@ -116,6 +120,7 @@ def test_extractor_captures_current_subsection_from_preceding_h3() -> None:
 
 
 # ───────── 6 — H2 transition updates section ─────────
+
 
 def test_extractor_updates_section_when_a_new_h2_appears() -> None:
     md = dedent(
@@ -144,6 +149,7 @@ def test_extractor_updates_section_when_a_new_h2_appears() -> None:
 
 # ───────── 7 — non-SQL fences are ignored ─────────
 
+
 def test_extractor_ignores_non_sql_fences() -> None:
     md = dedent(
         """\
@@ -165,6 +171,7 @@ def test_extractor_ignores_non_sql_fences() -> None:
 
 # ───────── 8 — leading dash comments preserved ─────────
 
+
 def test_extractor_preserves_leading_dash_comments_inside_block() -> None:
     md = dedent(
         """\
@@ -182,6 +189,7 @@ def test_extractor_preserves_leading_dash_comments_inside_block() -> None:
 
 # ───────── 9 — multi-statement block stored as one entry ─────────
 
+
 def test_extractor_handles_multiple_statements_in_one_block() -> None:
     md = dedent(
         """\
@@ -198,6 +206,7 @@ def test_extractor_handles_multiple_statements_in_one_block() -> None:
 
 
 # ───────── 10 — sequential zero-padded ids ─────────
+
 
 def test_extractor_assigns_sequential_ids_by_appearance_order() -> None:
     md = dedent(
@@ -221,6 +230,7 @@ def test_extractor_assigns_sequential_ids_by_appearance_order() -> None:
 
 # ───────── 11 — determinism ─────────
 
+
 def test_extractor_is_deterministic() -> None:
     md = dedent(
         """\
@@ -237,21 +247,22 @@ def test_extractor_is_deterministic() -> None:
         ```
         """
     )
-    first = [s.__dict__ for s in extract(md)]
-    second = [s.__dict__ for s in extract(md)]
+    first = [s.to_dict() for s in extract(md)]
+    second = [s.to_dict() for s in extract(md)]
     assert first == second
 
 
 # ───────── 12 — line number is opener only ─────────
 
+
 def test_extractor_uses_only_the_opening_fence_line_for_positioning() -> None:
     md = "\n".join(
         [
-            "```sql",           # line 1 — opener
-            "SELECT",           # line 2
-            "  1",              # line 3
-            "FROM DUAL;",       # line 4
-            "```",              # line 5 — closer
+            "```sql",  # line 1 — opener
+            "SELECT",  # line 2
+            "  1",  # line 3
+            "FROM DUAL;",  # line 4
+            "```",  # line 5 — closer
         ]
     )
     snippets = extract(md)
@@ -260,6 +271,7 @@ def test_extractor_uses_only_the_opening_fence_line_for_positioning() -> None:
 
 
 # ───────── 13 — unclosed fence raises ─────────
+
 
 def test_extractor_rejects_unclosed_fence_with_clear_error() -> None:
     md = dedent(
@@ -277,6 +289,7 @@ def test_extractor_rejects_unclosed_fence_with_clear_error() -> None:
 
 
 # ───────── 14 — CLI writes JSON to stdout ─────────
+
 
 def test_extractor_cli_writes_catalog_to_stdout_by_default(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -310,6 +323,7 @@ def test_extractor_cli_writes_catalog_to_stdout_by_default(
 
 # ───────── 15 — CLI writes to file with -o flag ─────────
 
+
 def test_extractor_cli_writes_to_file_when_output_flag_is_set(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
@@ -335,6 +349,7 @@ def test_extractor_cli_writes_to_file_when_output_flag_is_set(tmp_path: Path) ->
 
 
 # ───────── helper — extract_file ─────────
+
 
 def test_extract_file_reads_from_disk(tmp_path: Path) -> None:
     """Bonus wrapper test — extract_file() is the public thin I/O layer."""
