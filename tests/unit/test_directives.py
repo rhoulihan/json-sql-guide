@@ -176,3 +176,138 @@ def test_apply_directives_returns_directed_snippet_with_empty_set_when_no_direct
     assert isinstance(directed, DirectedSnippet)
     assert isinstance(directed.directives, DirectiveSet)
     assert not list(directed.directives)
+
+
+# ───────── Edge cases — inline parsing ─────────
+
+
+def test_inline_parser_tolerates_leading_blank_lines_and_plain_comments() -> None:
+    """A regular `--` comment with no `@directive` is allowed in the
+    leading comment block and silently ignored. Blank lines are
+    tolerated too. The parser only breaks on the first *real* SQL line.
+    """
+    sql = "\n-- regular comment not a directive\n-- @skip\nSELECT 1 FROM DUAL;"
+    directives = parse_inline(_snip(sql))
+    assert Directive.SKIP in directives
+
+
+def test_inline_runs_as_rejects_non_dba_payload() -> None:
+    sql = "-- @runs-as superuser\nSELECT 1 FROM DUAL;"
+    with pytest.raises(DirectiveParseError, match="@runs-as expects 'DBA'"):
+        parse_inline(_snip(sql))
+
+
+def test_inline_wrap_as_rejects_empty_payload() -> None:
+    sql = "-- @wrap-as\nJSON_EXISTS(doc, '$.x')"
+    with pytest.raises(DirectiveParseError, match="@wrap-as requires a template"):
+        parse_inline(_snip(sql))
+
+
+def test_inline_requires_fixture_rejects_empty_payload() -> None:
+    sql = "-- @requires-fixture\nSELECT 1 FROM DUAL;"
+    with pytest.raises(DirectiveParseError, match="@requires-fixture requires a profile name"):
+        parse_inline(_snip(sql))
+
+
+def test_inline_unknown_directive_raises() -> None:
+    sql = "-- @whoops-unknown\nSELECT 1 FROM DUAL;"
+    with pytest.raises(DirectiveParseError, match="unknown directive"):
+        parse_inline(_snip(sql))
+
+
+# ───────── Edge cases — sidecar loader ─────────
+
+
+def test_load_sidecar_returns_empty_dict_when_file_does_not_exist(tmp_path: Path) -> None:
+    assert load_sidecar(tmp_path / "does-not-exist.yaml") == {}
+
+
+def test_load_sidecar_handles_empty_yaml(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("")
+    assert load_sidecar(sidecar) == {}
+
+
+def test_sidecar_accepts_fragment_bare_directive(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - fragment\n")
+    overrides = load_sidecar(sidecar)
+    assert Directive.FORCE_FRAGMENT in overrides["sql-0001"]
+
+
+def test_sidecar_accepts_wrap_as_payload(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - wrap-as: SELECT * FROM orders o WHERE %s\n")
+    overrides = load_sidecar(sidecar)
+    assert overrides["sql-0001"].wrap_as == "SELECT * FROM orders o WHERE %s"
+
+
+def test_sidecar_accepts_requires_fixture_payload(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - requires-fixture: deep-nest\n")
+    overrides = load_sidecar(sidecar)
+    assert "deep-nest" in overrides["sql-0001"].required_fixtures
+
+
+def test_sidecar_accepts_runs_as_dba(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - runs-as: DBA\n")
+    overrides = load_sidecar(sidecar)
+    assert Directive.RUNS_AS_DBA in overrides["sql-0001"]
+
+
+def test_sidecar_rejects_unknown_bare_directive(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - whoops\n")
+    with pytest.raises(DirectiveParseError, match="unknown bare directive"):
+        load_sidecar(sidecar)
+
+
+def test_sidecar_rejects_unknown_keyed_directive(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - mystery: 42\n")
+    with pytest.raises(DirectiveParseError, match="unknown directive"):
+        load_sidecar(sidecar)
+
+
+def test_sidecar_rejects_invalid_ora_code(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - expect-error: not-an-ora-code\n")
+    with pytest.raises(DirectiveParseError, match="expect-error expects"):
+        load_sidecar(sidecar)
+
+
+def test_sidecar_rejects_runs_as_non_dba(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - runs-as: guest\n")
+    with pytest.raises(DirectiveParseError, match="runs-as expects 'DBA'"):
+        load_sidecar(sidecar)
+
+
+def test_sidecar_rejects_empty_wrap_as_payload(tmp_path: Path) -> None:
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - wrap-as: ''\n")
+    with pytest.raises(DirectiveParseError, match="wrap-as requires a template"):
+        load_sidecar(sidecar)
+
+
+def test_sidecar_rejects_malformed_entry(tmp_path: Path) -> None:
+    """A list entry that's neither a string nor a single-key mapping is malformed."""
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  sql-0001:\n    - [a, b, c]\n")
+    with pytest.raises(DirectiveParseError, match="malformed entry"):
+        load_sidecar(sidecar)
+
+
+# ───────── Apply wiring ─────────
+
+
+def test_apply_directives_pulls_by_line_key(tmp_path: Path) -> None:
+    """A sidecar keyed by ``line:<n>`` applies to a snippet at that line."""
+    sidecar = tmp_path / "overrides.yaml"
+    sidecar.write_text("overrides:\n  line:42:\n    - skip\n")
+    overrides = load_sidecar(sidecar)
+
+    snippet = _snip("SELECT 1 FROM DUAL;", line=42)
+    directed = apply_directives(snippet, overrides)
+    assert Directive.SKIP in directed.directives
