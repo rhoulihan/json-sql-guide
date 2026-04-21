@@ -57,7 +57,9 @@ select = [
     "PT",  # pytest-style
 ]
 ignore = [
-    "E501", # line length handled by formatter
+    "E501",  # line length handled by formatter
+    "TC001", # domain types stay importable at runtime — we use `from __future__ import annotations`
+    "TC003", # standard library imports stay at module level
 ]
 
 [tool.ruff.lint.per-file-ignores]

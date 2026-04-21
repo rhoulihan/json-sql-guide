@@ -111,10 +111,7 @@ def test_classifier_tags_where_fragment_as_fragment() -> None:
 
 
 def test_classifier_tags_json_table_fragment_as_fragment() -> None:
-    sql = (
-        "JSON_TABLE(o.order_doc, '$.items[*]' "
-        "COLUMNS (sku VARCHAR2(50) PATH '$.sku'))"
-    )
+    sql = "JSON_TABLE(o.order_doc, '$.items[*]' COLUMNS (sku VARCHAR2(50) PATH '$.sku'))"
     result = classify(_snip(sql))
     assert result.classification is Classification.FRAGMENT
 
@@ -150,10 +147,7 @@ def test_classifier_tags_body_with_only_comments_as_comment_only() -> None:
 
 
 def test_classifier_ignores_leading_comments_when_classifying() -> None:
-    sql = (
-        "-- this select finds all orders in the Belmont area\n"
-        "SELECT * FROM orders;"
-    )
+    sql = "-- this select finds all orders in the Belmont area\nSELECT * FROM orders;"
     result = classify(_snip(sql))
     assert result.classification is Classification.STANDALONE_QUERY
 
