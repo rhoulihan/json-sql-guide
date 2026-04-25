@@ -112,6 +112,7 @@ branch = true
 omit = [
     "src/validator/cli.py",  # CLI integration tested via subprocess in integration/
     "src/validator/fixture.py",  # FixtureLoader tested in integration/test_fixture.py
+    "src/validator/runner.py",  # Runner tested in integration/test_runner.py
 ]
 
 [tool.coverage.report]
