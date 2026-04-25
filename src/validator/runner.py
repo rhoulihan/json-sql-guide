@@ -368,6 +368,10 @@ def _split_statements(sql: str) -> list[str]:
     tail = "".join(buf).strip()
     if tail:
         parts.append(tail)
+    # Drop fragments that are nothing but ``-- ...`` line comments —
+    # a trailing inline comment after the last ``;`` shouldn't become
+    # an executable statement.
+    parts = [p for p in parts if _strip_leading_comments(p).strip()]
     return parts or [sql.strip()]
 
 
