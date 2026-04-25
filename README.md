@@ -1,44 +1,128 @@
 # json-sql-guide
 
-Companion validator for the Oracle SQL/JSON Developer Guide.
+Companion validator for the **Oracle SQL/JSON Developer Guide**.
 
-Parses the published guide, extracts every `` ```sql `` block, and runs each against a live Oracle AI Database 26ai instance. Emits pass/fail reports, JUnit XML for CI, and an annotated copy of the article with inline badges on every block.
+This repository runs every `` ```sql `` example in the guide against a live Oracle AI Database 26ai instance and emits pass / fail reports, JUnit XML for CI, an annotated copy of the article with inline badges, and a deterministic JSON dump for diffing across runs.
 
-## Why
+It is published as a **companion artifact to the guide itself**: readers who want to verify the examples in their own database, or contributors editing the article, can clone this repo and run `validator run` to see exactly which snippets pass.
 
-The guide is ~1,700 lines of prose and 67 SQL snippets. Every snippet is plausible until it hits a parser. Doc drift over time (clause ordering tightening in 23ai, behavior changes in 26ai) turns yesterday's valid example into tomorrow's broken one. This tool is the parser.
+## Why this exists
+
+The guide is ~1,700 lines of prose and 100+ SQL statements. Every snippet is plausible until it hits a parser. Doc drift over time (clause ordering tightening between 23ai and 26ai, behavior changes in `JSON_TRANSFORM`, partial-index syntax that never landed) turns yesterday's valid example into tomorrow's broken one. This tool is the parser.
+
+The validation harness owns:
+
+- **Extraction** — pulls every `` ```sql `` fence into a stable, line-anchored catalog.
+- **Classification** — routes each block (standalone query / DDL / fragment / comment-only) to the right execution path.
+- **Wrapping** — rewraps partial fragments (bare `WHERE`, naked `JSON_TABLE`, recursive `CYCLE` clauses) into executable SQL via a contributor-editable shape registry.
+- **Execution** — runs against Oracle with per-snippet savepoint isolation so DML rolls back between examples; tracks DDL artifacts (TABLE / INDEX / VIEW / MATERIALIZED VIEW / SEARCH INDEX / DUALITY VIEW / PROPERTY GRAPH) and drops them at the end.
+- **Reporting** — rich-formatted CLI summary, JUnit XML, annotated Markdown copy of the source, and a stable JSON dump for diffing.
+- **Diff mode** — flags regressions (snippets that used to pass and now fail) so a guide PR can be blocked on red blocks.
 
 ## Status
 
-**v1 in build.** P0–P8 complete: scaffold, extractor, classifier, directives, fragment wrap registry, fixture loader, execution runner, reporter, diff mode. P9 wires CI polish + the PR bot. See [`docs/requirements.md`](docs/requirements.md) for the v1 spec and [`docs/implementation-plan.md`](docs/implementation-plan.md) for phase-by-phase TDD.
-
-The initial SQL inventory is captured in [`docs/sql-catalog-snapshot.json`](docs/sql-catalog-snapshot.json) — a baseline of 67 blocks across 13 sections from the guide at the time this repo was created.
+**v1 ships.** All ten phases (P0–P10, including the dogfood pass) complete. The live Oracle SQL/JSON Developer Guide currently runs **113 / 113 statements clean** against Oracle 26ai with the bundled fixture. See [`docs/dogfood-findings.md`](docs/dogfood-findings.md) for the historical first-pass triage and [`docs/requirements.md`](docs/requirements.md) for the v1 spec.
 
 ## Quick start
 
 ```bash
 git clone git@github.com:rhoulihan/json-sql-guide.git
 cd json-sql-guide
-make setup           # uv venv, deps, pre-commit hooks
-make db-up           # boot Oracle 26ai Free
-make test            # unit + integration suites
+
+# One-time
+make setup                       # uv venv, deps, pre-commit hooks
+
+# Boot Oracle 26ai Free locally and run the guide
+docker run -d --name jsg-oracle --shm-size=1g -p 1521:1521 \
+  -e ORACLE_PWD=oraclepw \
+  container-registry.oracle.com/database/free:latest
+
+# Wait for the container to print "DATABASE IS READY TO USE", then create
+# the validator user (one-time)
+docker exec -i jsg-oracle sqlplus -s sys/oraclepw@//localhost:1521/FREEPDB1 as sysdba <<'SQL'
+ALTER SESSION SET CONTAINER = FREEPDB1;
+CREATE USER validator IDENTIFIED BY validator QUOTA UNLIMITED ON USERS;
+GRANT CONNECT, RESOURCE, CREATE VIEW, CREATE MATERIALIZED VIEW,
+      CREATE SEQUENCE, CREATE PROCEDURE, CTXAPP TO validator;
+SQL
+
+# Run the validator against a guide markdown
+uv run validator run ../LinkedIn/articles/oracle-sql-json-developer-guide.md \
+  --out reports/
 ```
 
-Reports land in `reports/`:
-- `junit.xml` — for CI
-- `results.json` — machine-readable run state
-- `annotated.md` — source guide with ✓/✗ badges on every SQL block
+Outputs in `reports/`:
 
-Run against a guide markdown directly:
+| File | Purpose |
+|---|---|
+| `junit.xml` | One `<testcase>` per executable statement, JUnit-schema valid. CI uploads this as a test artifact. |
+| `results.json` | Deterministic JSON dump of every Result field. Used by `validator diff` for regression tracking. |
+| `annotated.md` | Verbatim copy of the source guide with `<!-- ✓ sql-NNNN passed (N rows, Nms) -->` (or ✗ / ⊘) HTML comments inserted after each `sql` fence. Re-running the annotator over its own output is byte-for-byte idempotent. |
+
+## CLI
 
 ```bash
-uv run validator run path/to/guide.md --out reports/
-uv run validator diff previous.json reports/results.json --format md
+# Extract every ``` sql ``` block into a stable JSON catalog
+uv run validator extract <guide.md> [-o catalog.json]
+
+# Full pipeline: extract → classify → execute → report
+uv run validator run <guide.md> [--out reports/] [--fast-fail] [--overrides docs/sql-overrides.yaml]
+
+# Diff two results.json runs; emits markdown by default
+uv run validator diff previous.json current.json [--format md|json] [-o diff.md]
+```
+
+`validator run` exits non-zero if any snippet fails. `validator diff` exits non-zero only on **regressions** (a snippet that used to pass is now failing) — improvements are always exit 0.
+
+## Important environment note
+
+The validator's `CREATE SEARCH INDEX` examples (§11 of the guide) require **Oracle Text** (CTXSYS), which is shipped with the official `container-registry.oracle.com/database/free` image but **not** with the smaller `gvenzl/oracle-free:*-faststart` images. If you use the gvenzl image you'll see `ORA-29833 indextype does not exist` on those two snippets; everything else still passes.
+
+## Repository layout
+
+```
+json-sql-guide/
+├── docs/
+│   ├── requirements.md              v1 spec
+│   ├── implementation-plan.md       phase-by-phase TDD plan
+│   ├── dogfood-findings.md          first-pass triage report
+│   └── sql-catalog-snapshot.json    baseline catalog from initial guide
+├── fixture/
+│   ├── schema.sql                   tables for everything in the guide
+│   └── seeds/                       composable seed profiles
+│       ├── base.py                  10 canonical orders
+│       ├── tags_with_nums.py        mixed-type tag arrays
+│       ├── deep_nest.py             4-level path examples
+│       ├── dates_and_intervals.py   DATE/TIMESTAMPTZ/INTERVAL examples
+│       ├── hybrid.py                customers, products, order_items, employees, categories
+│       ├── events.py                JSON event log
+│       ├── user_settings.py         relational config rows for JSON_OBJECTAGG
+│       └── legacy.py                CLOB-backed JSON for migration story
+├── src/validator/
+│   ├── extractor.py                 markdown → snippet catalog
+│   ├── classifier.py                snippet → STANDALONE / FRAGMENT / COMMENT_ONLY
+│   ├── directives.py                inline -- @... + sidecar YAML
+│   ├── wraps.py                     fragment shape registry
+│   ├── fixture.py                   FixtureLoader: drops + recreates schema, seeds
+│   ├── runner.py                    Oracle execution + savepoint isolation
+│   ├── reporter.py                  CLI / JUnit / annotated MD / JSON
+│   ├── diff.py                      regression detection
+│   └── cli.py                       click entry points
+├── tests/
+│   ├── unit/                        pure-logic suites; no DB required
+│   ├── integration/                 require_oracle marker; service container in CI
+│   └── golden/                      catalog snapshot for extractor regression
+├── .github/workflows/
+│   ├── ci.yml                       lint + typecheck + unit
+│   ├── integration.yml              service container + integration suite
+│   ├── dogfood.yml                  runs validator against the live guide; uploads artifacts
+│   └── pr-comment.yml               posts a summary back to the originating LinkedIn PR
+├── docker-compose.yml
+├── Makefile
+└── pyproject.toml
 ```
 
 ## CI workflows
-
-Three workflows live under `.github/workflows/`:
 
 | Workflow | Trigger | Job |
 |---|---|---|
@@ -56,6 +140,7 @@ When a LinkedIn PR touches `articles/oracle-sql-json-developer-guide.md`, the bo
 - **Full reports link** — points at the GitHub Actions run that produced the artifact. Click through to download `annotated.md` (the guide with badges in place) and `results.json` (machine-readable).
 
 If the bot comment never appears, check that:
+
 - The Dogfood workflow ran successfully (look in this repo's Actions tab).
 - The originating PR's `repository_dispatch` payload included `pr_number` and `head_sha`.
 - The `LINKEDIN_REPO_TOKEN` secret is set in this repo (a GitHub PAT or app token with `pull-requests: write` on the LinkedIn repo).
@@ -87,6 +172,17 @@ jobs:
             }
 ```
 
+## Contributing
+
+This is a thin, well-tested codebase. Adding a new shape, directive, or output format follows a strict TDD pattern — RED commit with failing tests, GREEN commit with the implementation, REFACTOR for cleanup. See `docs/implementation-plan.md` for the architecture intent and `tests/` for examples.
+
+If a new guide example fails because the validator can't model some new SQL feature (a future Oracle 27ai construct, say), the path forward is:
+
+1. Reproduce as a unit test against the existing module that owns that concern (extractor / classifier / wraps / runner).
+2. Land a RED commit with the failing test.
+3. Land a GREEN commit that makes the test pass.
+4. Open a PR. The dogfood workflow will run against the actual guide and prove the change doesn't regress anything.
+
 ## License
 
-TBD (likely MIT).
+MIT — see [LICENSE](LICENSE).
