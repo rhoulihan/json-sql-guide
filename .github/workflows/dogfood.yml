@@ -1,0 +1,130 @@
+name: Dogfood
+
+# Runs the validator against a real guide markdown — usually the live
+# Oracle SQL/JSON Developer Guide in the sibling LinkedIn repo. Two
+# trigger paths:
+#
+#   * workflow_dispatch — manual run with optional inputs.
+#   * repository_dispatch (event_type=guide_dogfood) — fired by the
+#     LinkedIn repo when a PR touches the guide. The dispatch payload
+#     carries the guide URL, the PR number, and the head SHA.
+
+on:
+  workflow_dispatch:
+    inputs:
+      guide_url:
+        description: "Raw URL to the guide markdown to validate."
+        required: false
+        default: "https://raw.githubusercontent.com/rhoulihan/LinkedIn/master/articles/oracle-sql-json-developer-guide.md"
+      pr_number:
+        description: "Originating LinkedIn PR number (optional)."
+        required: false
+        default: ""
+      head_sha:
+        description: "Originating commit SHA (optional)."
+        required: false
+        default: ""
+  repository_dispatch:
+    types: [guide_dogfood]
+
+permissions:
+  contents: read
+
+jobs:
+  dogfood:
+    name: Validate guide against Oracle 26ai
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      oracle:
+        image: container-registry.oracle.com/database/free:26ai
+        env:
+          ORACLE_PWD: validator
+          ORACLE_CHARACTERSET: AL32UTF8
+        ports:
+          - 1521:1521
+        options: >-
+          --shm-size=1g
+          --health-cmd "echo exit | sqlplus -L validator/validator@//localhost:1521/FREEPDB1 | grep -q Connected"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 180s
+
+    env:
+      GUIDE_URL: ${{ github.event.inputs.guide_url || github.event.client_payload.guide_url || 'https://raw.githubusercontent.com/rhoulihan/LinkedIn/master/articles/oracle-sql-json-developer-guide.md' }}
+      PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.client_payload.pr_number || '' }}
+      HEAD_SHA: ${{ github.event.inputs.head_sha || github.event.client_payload.head_sha || '' }}
+      ORACLE_HOST: localhost
+      ORACLE_PORT: "1521"
+      ORACLE_SERVICE: FREEPDB1
+      ORACLE_USER: validator
+      ORACLE_PASSWORD: validator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Wait for Oracle healthy
+        run: |
+          echo "Waiting for Oracle to become healthy..."
+          for i in {1..40}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' "${{ job.services.oracle.id }}" 2>/dev/null || echo "starting")
+            echo "attempt $i: $status"
+            if [ "$status" = "healthy" ]; then
+              echo "Oracle is healthy."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Oracle did not become healthy in time."
+          exit 1
+
+      - name: Download guide markdown
+        run: |
+          mkdir -p inputs
+          curl -fsSL "$GUIDE_URL" -o inputs/guide.md
+          wc -l inputs/guide.md
+
+      - name: Run validator
+        id: validate
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          uv run validator run inputs/guide.md --out reports/
+
+      - name: Persist trigger metadata
+        run: |
+          cat > reports/dogfood-meta.json <<EOF
+          {
+            "guide_url": "${GUIDE_URL}",
+            "pr_number": "${PR_NUMBER}",
+            "head_sha": "${HEAD_SHA}",
+            "run_id": "${{ github.run_id }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "validator_exit_code": "${{ steps.validate.outcome }}"
+          }
+          EOF
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dogfood-reports
+          path: reports/
+          retention-days: 14
+
+      - name: Fail job if validator failed
+        if: steps.validate.outcome == 'failure'
+        run: |
+          echo "Validator reported failures — see the dogfood-reports artifact."
+          exit 1

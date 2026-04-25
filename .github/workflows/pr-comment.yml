@@ -1,0 +1,99 @@
+name: PR Comment
+
+# Posts a validator summary comment on a LinkedIn PR after a Dogfood
+# run completes. Reads the dogfood artifact, extracts pass/fail
+# counts, and writes a comment to the originating PR.
+
+on:
+  workflow_run:
+    workflows: ["Dogfood"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  comment:
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Download dogfood artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dogfood-reports
+          path: reports
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read trigger metadata
+        id: meta
+        run: |
+          if [ ! -f reports/dogfood-meta.json ]; then
+            echo "no metadata; nothing to comment on"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PR_NUMBER=$(jq -r '.pr_number // ""' reports/dogfood-meta.json)
+          RUN_URL=$(jq -r '.run_url // ""' reports/dogfood-meta.json)
+          HEAD_SHA=$(jq -r '.head_sha // ""' reports/dogfood-meta.json)
+          GUIDE_URL=$(jq -r '.guide_url // ""' reports/dogfood-meta.json)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "no PR number; skipping comment"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "run_url=$RUN_URL" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "guide_url=$GUIDE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Build comment body
+        if: steps.meta.outputs.skip != 'true'
+        id: body
+        run: |
+          PASSED=$(jq '[.[] | select(.outcome=="pass" or .outcome=="expected-error-confirmed")] | length' reports/results.json)
+          FAILED=$(jq '[.[] | select(.outcome=="fail")] | length' reports/results.json)
+          SKIPPED=$(jq '[.[] | select(.outcome=="skip")] | length' reports/results.json)
+          TOTAL=$(jq 'length' reports/results.json)
+          {
+            echo "### SQL Validator Report"
+            echo ""
+            echo "Ran against \`$(basename "${{ steps.meta.outputs.guide_url }}")\` at commit \`${{ steps.meta.outputs.head_sha }}\`."
+            echo ""
+            echo "✅ Passed: **${PASSED}**"
+            echo "❌ Failed: **${FAILED}**"
+            echo "⊘ Skipped: **${SKIPPED}**"
+            echo "Total blocks: ${TOTAL}"
+            echo ""
+            if [ "$FAILED" -gt 0 ]; then
+              echo "<details><summary>Failures</summary>"
+              echo ""
+              jq -r '.[] | select(.outcome=="fail") | "- `\(.id)` line \(.line): \(.error_code // "(no code)") — \(.error_text // "")"' reports/results.json
+              echo ""
+              echo "</details>"
+              echo ""
+            fi
+            echo "[Full reports & annotated guide](${{ steps.meta.outputs.run_url }})"
+          } > comment.md
+          echo "path=comment.md" >> "$GITHUB_OUTPUT"
+
+      - name: Post comment to LinkedIn PR
+        if: steps.meta.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.LINKEDIN_REPO_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('comment.md', 'utf8');
+            const prNumber = parseInt('${{ steps.meta.outputs.pr_number }}', 10);
+            await github.rest.issues.createComment({
+              owner: 'rhoulihan',
+              repo: 'LinkedIn',
+              issue_number: prNumber,
+              body: body,
+            });

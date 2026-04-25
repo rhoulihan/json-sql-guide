@@ -45,7 +45,7 @@ def oracle_conn() -> Iterator[object]:
     dsn = f"{host}:{port}/{service}"
     try:
         conn = oracledb.connect(user=user, password=password, dsn=dsn)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(f"Oracle not reachable at {dsn}: {exc}")
 
     try:

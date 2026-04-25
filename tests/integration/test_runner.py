@@ -46,10 +46,10 @@ def _mk(
 
 def _factory(conn: Any) -> Callable[[str], Any]:
     """Return a conn_factory that records roles requested."""
-    conn.__role_calls__ = []  # type: ignore[attr-defined]
+    conn.__role_calls__ = []
 
     def f(role: str) -> Any:
-        conn.__role_calls__.append(role)  # type: ignore[attr-defined]
+        conn.__role_calls__.append(role)
         return conn
 
     return f
@@ -233,7 +233,7 @@ def test_runner_uses_dba_connection_when_runs_as_dba_directive_present(loaded: A
     factory = _factory(loaded)
     runner = Runner(factory)
     runner.execute([_mk("SELECT 1 FROM DUAL", directives=directives)])
-    roles = loaded.__role_calls__  # type: ignore[attr-defined]
+    roles = loaded.__role_calls__
     assert "dba" in roles
 
 
