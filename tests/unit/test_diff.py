@@ -127,8 +127,8 @@ def test_diff_emits_markdown_with_section_grouping() -> None:
     ]
     curr = [
         _r("sql-0001", "fail", error_code="ORA-2"),  # regression
-        _r("sql-0002", "pass"),                       # improvement
-        _r("sql-0004", "pass"),                       # added
+        _r("sql-0002", "pass"),  # improvement
+        _r("sql-0004", "pass"),  # added
     ]
     diff = diff_results(prev, curr)
     md = render_diff_md(diff)

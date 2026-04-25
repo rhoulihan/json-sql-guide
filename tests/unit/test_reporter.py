@@ -208,9 +208,7 @@ def test_annotated_markdown_preserves_original_content_byte_for_byte_outside_of_
     annotated = out.read_text(encoding="utf-8")
     # Strip badge lines and confirm the rest is byte-identical to the source.
     badge_re = re.compile(r"^<!--\s*[✓✗⊘].*-->\s*$")
-    cleaned = "\n".join(
-        line for line in annotated.splitlines() if not badge_re.match(line)
-    )
+    cleaned = "\n".join(line for line in annotated.splitlines() if not badge_re.match(line))
     # Reattach trailing newline if source had one to match.
     if _sample_md().endswith("\n") and not cleaned.endswith("\n"):
         cleaned += "\n"

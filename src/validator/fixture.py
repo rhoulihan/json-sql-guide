@@ -90,8 +90,7 @@ class FixtureLoader:
             return importlib.import_module(f"fixture.seeds.{name}")
         except ModuleNotFoundError as exc:
             raise UnknownSeedError(
-                f"unknown seed profile: {name!r}. Available profiles live "
-                f"under fixture/seeds/"
+                f"unknown seed profile: {name!r}. Available profiles live under fixture/seeds/"
             ) from exc
 
 

@@ -141,8 +141,7 @@ def render_diff_md(diff: ResultDiff) -> str:
         for c in diff.regressions:
             code = c.current.error_code or "(no code)"
             lines.append(
-                f"- `{c.id}` (line {c.line}): "
-                f"{c.previous.outcome} → {c.current.outcome} ({code})"
+                f"- `{c.id}` (line {c.line}): {c.previous.outcome} → {c.current.outcome} ({code})"
             )
     lines.append("")
 
@@ -151,10 +150,7 @@ def render_diff_md(diff: ResultDiff) -> str:
         lines.append("_None._")
     else:
         for c in diff.improvements:
-            lines.append(
-                f"- `{c.id}` (line {c.line}): "
-                f"{c.previous.outcome} → {c.current.outcome}"
-            )
+            lines.append(f"- `{c.id}` (line {c.line}): {c.previous.outcome} → {c.current.outcome}")
     lines.append("")
 
     lines.append("## Newly Skipped")

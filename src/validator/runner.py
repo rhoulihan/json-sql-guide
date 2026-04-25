@@ -243,9 +243,7 @@ class Runner:
                     line=line,
                     classification=classification,
                     outcome="fail",
-                    error_text=(
-                        f"expected error {expected_error_code} but statement succeeded"
-                    ),
+                    error_text=(f"expected error {expected_error_code} but statement succeeded"),
                     rows_returned=rows_returned,
                     elapsed_ms=elapsed_ms,
                     wrapped_sql=wrapped_sql,
@@ -382,12 +380,7 @@ def _split_statements(sql: str) -> list[str]:
                 continue
             in_string = not in_string
             buf.append(ch)
-        elif (
-            not in_string
-            and ch == "-"
-            and i + 1 < len(sql)
-            and sql[i + 1] == "-"
-        ):
+        elif not in_string and ch == "-" and i + 1 < len(sql) and sql[i + 1] == "-":
             # Start of a ``--`` line comment — copy verbatim until newline.
             in_line_comment = True
             buf.append(ch)
@@ -507,5 +500,3 @@ def _drop_statement(artifact: _DDLArtifact) -> str:
     if artifact.kind == "JSON RELATIONAL DUALITY VIEW":
         return f"DROP VIEW {artifact.name}"
     return f"DROP {artifact.kind} {artifact.name}"
-
-

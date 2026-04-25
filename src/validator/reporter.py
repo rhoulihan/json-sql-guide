@@ -253,10 +253,7 @@ def _format_badge(sid: str, r: Result) -> str:
         rows = r.rows_returned if r.rows_returned is not None else 0
         return f"<!-- {symbol} {sid} passed ({rows} rows, {r.elapsed_ms}ms) -->"
     if r.outcome == "expected-error-confirmed":
-        return (
-            f"<!-- {symbol} {sid} expected-error-confirmed: "
-            f"{r.error_code or '(no code)'} -->"
-        )
+        return f"<!-- {symbol} {sid} expected-error-confirmed: {r.error_code or '(no code)'} -->"
     if r.outcome == "fail":
         return f"<!-- {symbol} {sid} failed: {r.error_code or '(no code)'} -->"
     if r.outcome == "skip":

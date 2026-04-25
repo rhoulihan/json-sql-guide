@@ -146,9 +146,7 @@ def run(
     default=None,
     help="Write diff to FILE. If omitted, prints to stdout.",
 )
-def diff_cmd(
-    previous: Path, current: Path, output_format: str, output: Path | None
-) -> None:
+def diff_cmd(previous: Path, current: Path, output_format: str, output: Path | None) -> None:
     """Compare two results.json runs and emit a regression report."""
     prev = _load_results(previous)
     curr = _load_results(current)

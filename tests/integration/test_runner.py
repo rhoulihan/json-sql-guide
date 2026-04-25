@@ -151,8 +151,7 @@ def test_runner_rolls_back_dml_between_snippets_via_savepoint(loaded: Any) -> No
     runner.execute(
         [
             _mk(
-                "INSERT INTO orders (order_doc) "
-                "VALUES (JSON('{\"orderId\": 9999}'))",
+                "INSERT INTO orders (order_doc) VALUES (JSON('{\"orderId\": 9999}'))",
                 id="sql-0001",
             ),
             _mk("SELECT COUNT(*) FROM orders", id="sql-0002"),
@@ -174,9 +173,7 @@ def test_runner_executes_ddl_in_sandbox_and_drops_artifacts_at_end(loaded: Any) 
     # Table must not exist after the run — it was cleaned up.
     cur = loaded.cursor()
     try:
-        cur.execute(
-            "SELECT COUNT(*) FROM user_tables WHERE table_name = 'RUNNER_SANDBOX_T'"
-        )
+        cur.execute("SELECT COUNT(*) FROM user_tables WHERE table_name = 'RUNNER_SANDBOX_T'")
         (count,) = cur.fetchone()
         assert count == 0
     finally:
@@ -214,10 +211,7 @@ def test_runner_records_elapsed_ms_within_expected_range(loaded: Any) -> None:
 def test_runner_splits_multi_statement_block_and_records_per_statement_outcomes(
     loaded: Any,
 ) -> None:
-    sql = (
-        "SELECT COUNT(*) FROM orders;\n"
-        "SELECT id FROM orders FETCH FIRST 1 ROW ONLY"
-    )
+    sql = "SELECT COUNT(*) FROM orders;\nSELECT id FROM orders FETCH FIRST 1 ROW ONLY"
     runner = Runner(_factory(loaded))
     results = runner.execute([_mk(sql)])
     assert len(results) == 2
