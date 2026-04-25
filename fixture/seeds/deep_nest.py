@@ -12,10 +12,15 @@ from typing import Any
 _ORDERS: list[dict[str, Any]] = [
     {
         "orderId": 3001,
-        "customer": "Nu Dynamics",
+        "customer": {
+            "name": "Nu Dynamics",
+            "tier": "gold",
+            "address": {"city": "Somewhere", "state": "CA", "zip": "90001"},
+        },
         "status": "shipped",
-        "amount": 75.0,
-        "items": [{"sku": "DEEPNEST-1", "quantity": 1, "unitPrice": 75.0}],
+        "priority": "normal",
+        "orderDate": "2025-04-10",
+        "items": [{"product": "Deep Nest 1", "quantity": 1, "unitPrice": 75.0, "category": "hardware"}],
         "shipping": {
             "method": "ground",
             "address": {
@@ -33,10 +38,15 @@ _ORDERS: list[dict[str, Any]] = [
     },
     {
         "orderId": 3002,
-        "customer": "Xi Research",
+        "customer": {
+            "name": "Xi Research",
+            "tier": "silver",
+            "address": {"city": "Nowhere", "state": "NM", "zip": "87001"},
+        },
         "status": "pending",
-        "amount": 125.0,
-        "items": [{"sku": "DEEPNEST-2", "quantity": 1, "unitPrice": 125.0}],
+        "priority": "normal",
+        "orderDate": "2025-04-11",
+        "items": [{"product": "Deep Nest 2", "quantity": 1, "unitPrice": 125.0, "category": "hardware"}],
         "shipping": {
             "method": "express",
             "address": {
@@ -59,8 +69,8 @@ def load(conn: Any) -> None:
     cur = conn.cursor()
     try:
         cur.executemany(
-            "INSERT INTO orders (order_id, order_doc) VALUES (:1, :2)",
-            [(o["orderId"], json.dumps(o)) for o in _ORDERS],
+            "INSERT INTO orders (order_doc) VALUES (:1)",
+            [(json.dumps(o),) for o in _ORDERS],
         )
         conn.commit()
     finally:

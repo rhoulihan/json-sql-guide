@@ -24,6 +24,11 @@ _DROP_ORDER: tuple[str, ...] = (
     "customers",
     "validated_orders",
     "entities",
+    "events",
+    "employees",
+    "categories",
+    "user_settings",
+    "legacy_table",
     "orders",
 )
 

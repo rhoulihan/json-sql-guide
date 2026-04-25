@@ -1,469 +1,462 @@
 [
   {
     "id": "sql-0001",
-    "line": 21,
-    "section": "The Sample Data",
-    "subsection": null,
-    "sql": "CREATE TABLE orders (\n  id        NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n  order_doc JSON\n);\n\nINSERT INTO orders (order_doc) VALUES (JSON('{\n  \"orderId\": 1001,\n  \"customer\": \"Acme Corp\",\n  \"status\": \"shipped\",\n  \"priority\": \"high\",\n  \"orderDate\": \"2025-03-15\",\n  \"shipping\": {\n    \"method\": \"express\",\n    \"address\": {\n      \"city\": \"Austin\",\n      \"state\": \"TX\",\n      \"zip\": \"78701\"\n    }\n  },\n  \"items\": [\n    {\"product\": \"Widget Pro\",  \"quantity\": 10, \"unitPrice\": 29.99, \"category\": \"hardware\"},\n    {\"product\": \"Gadget Plus\", \"quantity\": 5,  \"unitPrice\": 49.99, \"category\": \"electronics\"},\n    {\"product\": \"Cable Kit\",   \"quantity\": 50, \"unitPrice\": 4.99,  \"category\": \"accessories\"}\n  ],\n  \"tags\": [\"wholesale\", \"priority\", \"Q1-promo\"]\n}'));"
-  },
-  {
-    "id": "sql-0002",
-    "line": 58,
+    "line": 57,
     "section": "1. Dot-Notation: The Easy On-Ramp",
     "subsection": null,
     "sql": "SELECT o.order_doc.customer,\n       o.order_doc.status,\n       o.order_doc.shipping.address.city\nFROM   orders o;"
   },
   {
-    "id": "sql-0003",
-    "line": 69,
+    "id": "sql-0002",
+    "line": 68,
     "section": "1. Dot-Notation: The Easy On-Ramp",
     "subsection": null,
     "sql": "-- Types flow naturally — no casting required\nSELECT o.order_doc.customer       AS customer_name,\n       o.order_doc.orderId        AS order_id,\n       o.order_doc.status         AS status\nFROM   orders o\nWHERE  o.order_doc.orderId > 1000;   -- numeric comparison works"
   },
   {
-    "id": "sql-0004",
-    "line": 80,
+    "id": "sql-0003",
+    "line": 79,
     "section": "1. Dot-Notation: The Easy On-Ramp",
     "subsection": null,
     "sql": "SELECT o.order_doc.customer.string()       AS customer_name,\n       o.order_doc.orderId.number()         AS order_id,\n       o.order_doc.orderDate.date()         AS order_date,\n       o.order_doc.items.size()             AS item_count\nFROM   orders o\nWHERE  o.order_doc.priority.string() = 'high';"
   },
   {
-    "id": "sql-0005",
-    "line": 97,
+    "id": "sql-0004",
+    "line": 96,
     "section": "1. Dot-Notation: The Easy On-Ramp",
     "subsection": null,
     "sql": "-- First item\nSELECT o.order_doc.items[0].product AS first_product\nFROM   orders o;\n\n-- All items (returns a JSON array)\nSELECT o.order_doc.items[*].product\nFROM   orders o;\n\n-- Last item\nSELECT o.order_doc.items[last].product\nFROM   orders o;"
   },
   {
-    "id": "sql-0006",
-    "line": 119,
+    "id": "sql-0005",
+    "line": 118,
     "section": "2. JSON_VALUE: Surgical Scalar Extraction",
     "subsection": null,
-    "sql": "SELECT JSON_VALUE(o.order_doc, '$.customer')                          AS customer,\n       JSON_VALUE(o.order_doc, '$.orderId' RETURNING NUMBER)          AS order_id,\n       JSON_VALUE(o.order_doc, '$.shipping.address.zip')              AS zip_code\nFROM   orders o;"
+    "sql": "SELECT JSON_VALUE(o.order_doc, '$.customer.name')                     AS customer,\n       JSON_VALUE(o.order_doc, '$.orderId' RETURNING NUMBER)          AS order_id,\n       JSON_VALUE(o.order_doc, '$.shipping.address.zip')              AS zip_code\nFROM   orders o;"
   },
   {
-    "id": "sql-0007",
-    "line": 132,
+    "id": "sql-0006",
+    "line": 131,
     "section": "2. JSON_VALUE: Surgical Scalar Extraction",
     "subsection": "Why use JSON_VALUE when dot-notation exists?",
     "sql": "-- NULL ON ERROR (default): missing path returns NULL silently\nSELECT JSON_VALUE(o.order_doc, '$.nonexistent' NULL ON ERROR) FROM orders o;\n\n-- ERROR ON ERROR: missing path raises ORA exception\nSELECT JSON_VALUE(o.order_doc, '$.nonexistent' ERROR ON ERROR) FROM orders o;\n\n-- DEFAULT ON ERROR: missing path returns your fallback\nSELECT JSON_VALUE(o.order_doc, '$.discount' DEFAULT 0 ON ERROR RETURNING NUMBER)\nFROM   orders o;"
   },
   {
-    "id": "sql-0008",
-    "line": 148,
+    "id": "sql-0007",
+    "line": 147,
     "section": "2. JSON_VALUE: Surgical Scalar Extraction",
     "subsection": "Why use JSON_VALUE when dot-notation exists?",
     "sql": "ALTER SESSION SET JSON_BEHAVIOR = 'ON_ERROR:ERROR';"
   },
   {
-    "id": "sql-0009",
-    "line": 156,
+    "id": "sql-0008",
+    "line": 155,
     "section": "2. JSON_VALUE: Surgical Scalar Extraction",
     "subsection": "Why use JSON_VALUE when dot-notation exists?",
-    "sql": "-- Functional index using JSON_VALUE\nCREATE INDEX idx_order_customer ON orders (\n  JSON_VALUE(order_doc, '$.customer' RETURNING VARCHAR2(100) ERROR ON ERROR)\n);\n\n-- Equivalent index using dot-notation\nCREATE INDEX idx_order_status ON orders o (\n  o.order_doc.status.string()\n);"
+    "sql": "-- Functional index using JSON_VALUE\nCREATE INDEX idx_order_customer ON orders (\n  JSON_VALUE(order_doc, '$.customer.name' RETURNING VARCHAR2(100) ERROR ON ERROR)\n);\n\n-- Equivalent index using dot-notation\nCREATE INDEX idx_order_status ON orders o (\n  o.order_doc.status.string()\n);"
   },
   {
-    "id": "sql-0010",
-    "line": 170,
+    "id": "sql-0009",
+    "line": 169,
     "section": "2. JSON_VALUE: Surgical Scalar Extraction",
     "subsection": "Why use JSON_VALUE when dot-notation exists?",
     "sql": "-- Index defined with RETURNING NUMBER\nCREATE INDEX idx_order_id ON orders (\n  JSON_VALUE(order_doc, '$.orderId' RETURNING NUMBER ERROR ON ERROR)\n);\n\n-- This query USES the index (types match)\nSELECT * FROM orders\nWHERE  JSON_VALUE(order_doc, '$.orderId' RETURNING NUMBER) = 1001;\n\n-- This query IGNORES the index — JSON_VALUE defaults to VARCHAR2, not NUMBER\nSELECT * FROM orders\nWHERE  JSON_VALUE(order_doc, '$.orderId') = 1001;"
   },
   {
-    "id": "sql-0011",
-    "line": 189,
+    "id": "sql-0010",
+    "line": 188,
     "section": "2. JSON_VALUE: Surgical Scalar Extraction",
     "subsection": "Why use JSON_VALUE when dot-notation exists?",
-    "sql": "CREATE INDEX idx_cust_date ON orders (\n  JSON_VALUE(order_doc, '$.customer' RETURNING VARCHAR2(100)),\n  JSON_VALUE(order_doc, '$.orderDate' RETURNING DATE)\n);"
+    "sql": "CREATE INDEX idx_cust_date ON orders (\n  JSON_VALUE(order_doc, '$.customer.name' RETURNING VARCHAR2(100)),\n  JSON_VALUE(order_doc, '$.orderDate' RETURNING DATE)\n);"
   },
   {
-    "id": "sql-0012",
-    "line": 237,
+    "id": "sql-0011",
+    "line": 236,
     "section": "3. Extended Types: What OSON Actually Stores",
     "subsection": "Why You Care",
     "sql": "-- Native date comparison. No parse. No cast. Index still works.\nSELECT o.order_doc.customer\nFROM   orders o\nWHERE  o.order_doc.orderDate.date() > SYSDATE - 7;"
   },
   {
-    "id": "sql-0013",
-    "line": 259,
+    "id": "sql-0012",
+    "line": 258,
     "section": "3. Extended Types: What OSON Actually Stores",
     "subsection": "Getting Typed Values Into OSON",
     "sql": "INSERT INTO events (event_doc) VALUES (JSON_OBJECT(\n  'name'      VALUE 'Product Launch',\n  'scheduled' VALUE TIMESTAMP '2026-06-15 09:30:00 America/New_York',\n  'price'     VALUE 299.99,     -- stored as NUMBER\n  'confirmed' VALUE TRUE        -- stored as BOOLEAN\n));"
   },
   {
-    "id": "sql-0014",
-    "line": 270,
+    "id": "sql-0013",
+    "line": 269,
     "section": "3. Extended Types: What OSON Actually Stores",
     "subsection": "Getting Typed Values Into OSON",
     "sql": "SELECT JSON_OBJECT('expiresAt' VALUE JSON_SCALAR(SYSTIMESTAMP + INTERVAL '30' DAY))\nFROM DUAL;"
   },
   {
-    "id": "sql-0015",
-    "line": 277,
+    "id": "sql-0014",
+    "line": 276,
     "section": "3. Extended Types: What OSON Actually Stores",
     "subsection": "Getting Typed Values Into OSON",
     "sql": "INSERT INTO events (event_doc) VALUES (JSON('{\n  \"name\": \"Product Launch\",\n  \"scheduled\": {\"$oracleTimestampTZ\": \"2026-06-15T09:30:00-04:00\"}\n}' EXTENDED));"
   },
   {
-    "id": "sql-0016",
-    "line": 296,
+    "id": "sql-0015",
+    "line": 295,
     "section": "4. JSON_QUERY: When You Need the Whole Object",
     "subsection": null,
     "sql": "-- Extract the shipping object\nSELECT JSON_QUERY(o.order_doc, '$.shipping' PRETTY) AS shipping_info\nFROM   orders o;\n\n-- Extract the items array\nSELECT JSON_QUERY(o.order_doc, '$.items') AS all_items\nFROM   orders o;\n\n-- Extract all product names (multiple values → need a wrapper)\nSELECT JSON_QUERY(o.order_doc, '$.items[*].product' WITH WRAPPER) AS product_names\nFROM   orders o;\n-- Result: [\"Widget Pro\",\"Gadget Plus\",\"Cable Kit\"]"
   },
   {
-    "id": "sql-0017",
-    "line": 325,
+    "id": "sql-0016",
+    "line": 324,
     "section": "4. JSON_QUERY: When You Need the Whole Object",
     "subsection": "The Wrapper Clause",
     "sql": "-- Return empty array when path doesn't match\nSELECT JSON_QUERY(o.order_doc, '$.reviews' EMPTY ARRAY ON ERROR) FROM orders o;\n-- Result: []\n\n-- Return empty object\nSELECT JSON_QUERY(o.order_doc, '$.metadata' EMPTY OBJECT ON ERROR) FROM orders o;\n-- Result: {}"
   },
   {
-    "id": "sql-0018",
-    "line": 343,
+    "id": "sql-0017",
+    "line": 342,
     "section": "5. JSON_EXISTS: Filtering with Path Predicates",
     "subsection": null,
     "sql": "-- Orders that have a shipping address\nSELECT o.order_doc.customer.string()\nFROM   orders o\nWHERE  JSON_EXISTS(o.order_doc, '$.shipping.address');\n\n-- Orders with at least one item over $25\nSELECT o.order_doc.customer.string()\nFROM   orders o\nWHERE  JSON_EXISTS(o.order_doc, '$.items[*]?(@.unitPrice > 25)');"
   },
   {
-    "id": "sql-0019",
-    "line": 357,
+    "id": "sql-0018",
+    "line": 356,
     "section": "5. JSON_EXISTS: Filtering with Path Predicates",
     "subsection": null,
     "sql": "-- Items that are expensive AND high quantity\nWHERE JSON_EXISTS(o.order_doc,\n  '$.items[*]?(@.unitPrice > 25 && @.quantity >= 5)')\n\n-- Orders with specific tags\nWHERE JSON_EXISTS(o.order_doc,\n  '$.tags[*]?(@.string() == \"wholesale\")')\n\n-- Nested existence checks\nWHERE JSON_EXISTS(o.order_doc,\n  '$?(@.status == \"shipped\"\n      && exists(@.items[*]?(@.category == \"electronics\")))')"
   },
   {
-    "id": "sql-0020",
-    "line": 374,
+    "id": "sql-0019",
+    "line": 373,
     "section": "5. JSON_EXISTS: Filtering with Path Predicates",
     "subsection": null,
     "sql": "-- Return the customer name only when the customer lives in Belmont\nSELECT JSON_VALUE(o.order_doc, '$.customer?(@.address.city == \"Belmont\").name')\nFROM   orders o;"
   },
   {
-    "id": "sql-0021",
-    "line": 386,
+    "id": "sql-0020",
+    "line": 385,
     "section": "5. JSON_EXISTS: Filtering with Path Predicates",
     "subsection": null,
     "sql": "-- Works even if 'addresses' is an array of objects\nWHERE JSON_EXISTS(doc, '$.addresses?(@.city == \"Boston\")')"
   },
   {
-    "id": "sql-0022",
-    "line": 397,
+    "id": "sql-0021",
+    "line": 396,
     "section": "5. JSON_EXISTS: Filtering with Path Predicates",
     "subsection": null,
     "sql": "-- Get the SKUs of line items that cost more than $25\nSELECT JSON_QUERY(o.order_doc,\n  '$.items[*]?(@.unitPrice > 25).product' WITH WRAPPER) AS expensive_skus\nFROM orders o;\n-- [\"Widget Pro\",\"Gadget Plus\"]"
   },
   {
-    "id": "sql-0023",
-    "line": 411,
+    "id": "sql-0022",
+    "line": 410,
     "section": "5. JSON_EXISTS: Filtering with Path Predicates",
     "subsection": "The PASSING Clause: Bind Variables in Path Expressions",
     "sql": "WHERE JSON_EXISTS(o.order_doc,\n  '$.items[*]?(@.category == $cat && @.unitPrice < $max)'\n  PASSING 'electronics' AS \"cat\", 50 AS \"max\")"
   },
   {
-    "id": "sql-0024",
-    "line": 446,
+    "id": "sql-0023",
+    "line": 445,
     "section": "6. JSON_TABLE: The Bridge Between Worlds",
     "subsection": null,
     "sql": "SELECT jt.*\nFROM   orders o,\n       JSON_TABLE(o.order_doc, '$.items[*]'\n         COLUMNS (\n           row_num    FOR ORDINALITY,\n           product    VARCHAR2(100)  PATH '$.product',\n           quantity   NUMBER         PATH '$.quantity',\n           unit_price NUMBER         PATH '$.unitPrice',\n           category   VARCHAR2(50)   PATH '$.category'\n         )\n       ) jt;"
   },
   {
-    "id": "sql-0025",
-    "line": 474,
+    "id": "sql-0024",
+    "line": 473,
     "section": "6. JSON_TABLE: The Bridge Between Worlds",
     "subsection": "Column Types",
     "sql": "JSON_TABLE(doc, '$' COLUMNS (\n  -- Value column (like JSON_VALUE): extracts a scalar\n  name      VARCHAR2(100) PATH '$.name',\n\n  -- Query column (like JSON_QUERY): extracts JSON fragment\n  metadata  VARCHAR2(4000) FORMAT JSON PATH '$.metadata',\n\n  -- Exists column (like JSON_EXISTS): returns 'true'/'false'\n  has_notes VARCHAR2(5) EXISTS PATH '$.notes',\n\n  -- Ordinality column: auto-generated row number\n  row_num   FOR ORDINALITY\n))"
   },
   {
-    "id": "sql-0026",
-    "line": 494,
+    "id": "sql-0025",
+    "line": 493,
     "section": "6. JSON_TABLE: The Bridge Between Worlds",
     "subsection": "NESTED PATH: Hierarchical Flattening",
-    "sql": "SELECT jt.*\nFROM   orders o,\n       JSON_TABLE(o.order_doc, '$'\n         COLUMNS (\n           order_id    NUMBER        PATH '$.orderId',\n           customer    VARCHAR2(100) PATH '$.customer',\n           NESTED PATH '$.items[*]' COLUMNS (\n             item_num   FOR ORDINALITY,\n             product    VARCHAR2(100) PATH '$.product',\n             quantity   NUMBER        PATH '$.quantity',\n             unit_price NUMBER        PATH '$.unitPrice'\n           )\n         )\n       ) jt;"
+    "sql": "SELECT jt.*\nFROM   orders o,\n       JSON_TABLE(o.order_doc, '$'\n         COLUMNS (\n           order_id    NUMBER        PATH '$.orderId',\n           customer    VARCHAR2(100) PATH '$.customer.name',\n           NESTED PATH '$.items[*]' COLUMNS (\n             item_num   FOR ORDINALITY,\n             product    VARCHAR2(100) PATH '$.product',\n             quantity   NUMBER        PATH '$.quantity',\n             unit_price NUMBER        PATH '$.unitPrice'\n           )\n         )\n       ) jt;"
   },
   {
-    "id": "sql-0027",
-    "line": 525,
+    "id": "sql-0026",
+    "line": 524,
     "section": "6. JSON_TABLE: The Bridge Between Worlds",
     "subsection": "NESTED PATH: Hierarchical Flattening",
     "sql": "SELECT jt.*\nFROM   orders o,\n       JSON_TABLE(o.order_doc, '$'\n         COLUMNS (\n           order_id    NUMBER        PATH '$.orderId',\n           NESTED PATH '$.items[*]' COLUMNS (\n             product    VARCHAR2(100) PATH '$.product',\n             quantity   NUMBER        PATH '$.quantity'\n           ),\n           NESTED PATH '$.tags[*]' COLUMNS (\n             tag        VARCHAR2(50)  PATH '$'\n           )\n         )\n       ) jt;"
   },
   {
-    "id": "sql-0028",
-    "line": 568,
+    "id": "sql-0027",
+    "line": 567,
     "section": "6. JSON_TABLE: The Bridge Between Worlds",
     "subsection": "NESTED PATH: Hierarchical Flattening",
     "sql": "NESTED PATH '$.sections[*]' COLUMNS (\n  section_name VARCHAR2(100) PATH '$.name',\n  NESTED PATH '$.paragraphs[*]' COLUMNS (\n    para_text VARCHAR2(4000) PATH '$.text',\n    para_ord  FOR ORDINALITY\n  )\n)"
   },
   {
-    "id": "sql-0029",
-    "line": 602,
+    "id": "sql-0028",
+    "line": 601,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": null,
     "sql": "WITH high_value_items AS (\n  SELECT jt.*\n  FROM   orders o,\n         JSON_TABLE(o.order_doc, '$.items[*]'\n           COLUMNS (\n             product    VARCHAR2(100)  PATH '$.product',\n             quantity   NUMBER         PATH '$.quantity',\n             unit_price NUMBER         PATH '$.unitPrice'\n           )\n         ) jt\n  WHERE  jt.unit_price > 10\n)\nSELECT product, quantity * unit_price AS line_total\nFROM   high_value_items\nORDER  BY line_total DESC;"
   },
   {
-    "id": "sql-0030",
-    "line": 626,
+    "id": "sql-0029",
+    "line": 625,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": "Why CTEs Matter for JSON Work",
     "sql": "WITH\n  -- Step 1: Flatten JSON into rows\n  raw_items AS (...),\n  -- Step 2: Join with relational product catalog\n  enriched_items AS (...),\n  -- Step 3: Aggregate by category\n  category_totals AS (...)\n-- Step 4: Build the JSON response\nSELECT JSON_OBJECT(...) FROM category_totals;"
   },
   {
-    "id": "sql-0031",
-    "line": 644,
+    "id": "sql-0030",
+    "line": 643,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": "Multiple CTEs and Chaining",
     "sql": "WITH\n  step1 AS (SELECT ... FROM orders),\n  step2 AS (SELECT ... FROM step1 WHERE ...),\n  step3 AS (SELECT ... FROM step2 JOIN products ON ...)\nSELECT * FROM step3;"
   },
   {
-    "id": "sql-0032",
-    "line": 686,
+    "id": "sql-0031",
+    "line": 685,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": "Recursive CTEs",
     "sql": "WITH category_tree (id, parent_id, name, lvl) AS (\n  -- Anchor: start at root categories (no parent)\n  SELECT id, parent_id, name, 1\n  FROM   categories\n  WHERE  parent_id IS NULL\n  UNION ALL\n  -- Recursive: for each row found so far, find its children\n  SELECT c.id, c.parent_id, c.name, t.lvl + 1\n  FROM   category_tree t\n  JOIN   categories c ON c.parent_id = t.id\n)\nSEARCH DEPTH FIRST BY name SET seq\nSELECT LPAD(' ', (lvl-1)*2) || name AS category_hierarchy\nFROM   category_tree\nORDER  BY seq;"
   },
   {
-    "id": "sql-0033",
-    "line": 742,
+    "id": "sql-0032",
+    "line": 741,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": "Recursive CTEs",
     "sql": "CYCLE id SET is_cycle TO 'Y' DEFAULT 'N'"
   },
   {
-    "id": "sql-0034",
-    "line": 757,
+    "id": "sql-0033",
+    "line": 756,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": "Materialization: When Performance Matters",
     "sql": "WITH expensive_json_parse AS (\n  SELECT /*+ MATERIALIZE */ ...\n)"
   },
   {
-    "id": "sql-0035",
-    "line": 769,
+    "id": "sql-0034",
+    "line": 768,
     "section": "7. What's a CTE and Why Should You Care?",
     "subsection": "Materialization: When Performance Matters",
-    "sql": "-- Cross-sell analysis: find customer pairs who both bought products\n-- in the same category. The CTE is self-joined, so it's referenced twice.\nWITH customer_categories AS (\n  SELECT /*+ MATERIALIZE */\n         JSON_VALUE(o.order_doc, '$.customer') AS customer,\n         jt.category\n  FROM   orders o,\n         JSON_TABLE(o.order_doc, '$.items[*]'\n           COLUMNS (category VARCHAR2(50) PATH '$.category')) jt\n)\nSELECT DISTINCT a.customer       AS customer_a,\n                b.customer       AS customer_b,\n                a.category       AS shared_category\nFROM   customer_categories a\nJOIN   customer_categories b ON a.category = b.category\n                            AND a.customer < b.customer;"
+    "sql": "-- Cross-sell analysis: find customer pairs who both bought products\n-- in the same category. The CTE is self-joined, so it's referenced twice.\nWITH customer_categories AS (\n  SELECT /*+ MATERIALIZE */\n         JSON_VALUE(o.order_doc, '$.customer.name') AS customer,\n         jt.category\n  FROM   orders o,\n         JSON_TABLE(o.order_doc, '$.items[*]'\n           COLUMNS (category VARCHAR2(50) PATH '$.category')) jt\n)\nSELECT DISTINCT a.customer       AS customer_a,\n                b.customer       AS customer_b,\n                a.category       AS shared_category\nFROM   customer_categories a\nJOIN   customer_categories b ON a.category = b.category\n                            AND a.customer < b.customer;"
+  },
+  {
+    "id": "sql-0035",
+    "line": 797,
+    "section": "7. What's a CTE and Why Should You Care?",
+    "subsection": "Materialization: When Performance Matters",
+    "sql": "WITH recent_orders AS (\n  SELECT /*+ INLINE */\n         JSON_VALUE(order_doc, '$.customer.name') AS customer,\n         JSON_VALUE(order_doc, '$.orderDate' RETURNING DATE) AS order_date\n  FROM   orders\n)\nSELECT * FROM recent_orders WHERE order_date > SYSDATE - 7;"
   },
   {
     "id": "sql-0036",
-    "line": 798,
-    "section": "7. What's a CTE and Why Should You Care?",
-    "subsection": "Materialization: When Performance Matters",
-    "sql": "WITH recent_orders AS (\n  SELECT /*+ INLINE */\n         JSON_VALUE(order_doc, '$.customer') AS customer,\n         JSON_VALUE(order_doc, '$.orderDate' RETURNING DATE) AS order_date\n  FROM   orders\n)\nSELECT * FROM recent_orders WHERE order_date > SYSDATE - 7;"
-  },
-  {
-    "id": "sql-0037",
-    "line": 830,
+    "line": 829,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_OBJECT: Rows to Objects",
     "sql": "-- Key-value pairs\nSELECT JSON_OBJECT(\n  'customer' VALUE o.order_doc.customer.string(),\n  'total'    VALUE (\n    SELECT SUM(jt.quantity * jt.unit_price)\n    FROM   JSON_TABLE(o.order_doc, '$.items[*]'\n             COLUMNS (quantity NUMBER PATH '$.quantity',\n                      unit_price NUMBER PATH '$.unitPrice')) jt\n  )\n  RETURNING JSON\n) AS order_summary\nFROM orders o;\n-- {\"customer\":\"Acme Corp\",\"total\":799.4}"
   },
   {
-    "id": "sql-0038",
-    "line": 848,
+    "id": "sql-0037",
+    "line": 847,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_OBJECT: Rows to Objects",
     "sql": "SELECT JSON_OBJECT(employee_id, first_name, last_name, email)\nFROM   employees WHERE employee_id = 100;\n-- {\"employee_id\":100,\"first_name\":\"Steven\",\"last_name\":\"King\",\"email\":\"SKING\"}"
   },
   {
-    "id": "sql-0039",
-    "line": 856,
+    "id": "sql-0038",
+    "line": 855,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_OBJECT: Rows to Objects",
     "sql": "SELECT JSON_OBJECT(*) FROM employees WHERE employee_id = 100;"
   },
   {
-    "id": "sql-0040",
-    "line": 862,
+    "id": "sql-0039",
+    "line": 861,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_OBJECT: Rows to Objects",
     "sql": "-- Include nulls explicitly (default)\nSELECT JSON_OBJECT('name' VALUE 'Alice', 'middle' VALUE NULL NULL ON NULL);\n-- {\"name\":\"Alice\",\"middle\":null}\n\n-- Omit nulls entirely\nSELECT JSON_OBJECT('name' VALUE 'Alice', 'middle' VALUE NULL ABSENT ON NULL);\n-- {\"name\":\"Alice\"}"
   },
   {
-    "id": "sql-0041",
-    "line": 876,
+    "id": "sql-0040",
+    "line": 875,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_ARRAY: Building Arrays",
     "sql": "SELECT JSON_ARRAY(1, 'two', 3.0, NULL RETURNING JSON) FROM DUAL;\n-- [1,\"two\",3.0]   (NULL omitted by default — ABSENT ON NULL)\n\nSELECT JSON_ARRAY(1, 'two', 3.0, NULL NULL ON NULL RETURNING JSON) FROM DUAL;\n-- [1,\"two\",3.0,null]"
   },
   {
-    "id": "sql-0042",
-    "line": 886,
+    "id": "sql-0041",
+    "line": 885,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_ARRAY: Building Arrays",
     "sql": "SELECT JSON_ARRAY(\n  SELECT JSON_OBJECT('product' VALUE product_name, 'price' VALUE list_price)\n  FROM   products\n  WHERE  category_id = 10\n  ORDER  BY list_price DESC\n  RETURNING JSON\n) AS product_catalog\nFROM DUAL;"
   },
   {
-    "id": "sql-0043",
-    "line": 907,
+    "id": "sql-0042",
+    "line": 906,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_ARRAYAGG and JSON_OBJECTAGG: Aggregation into JSON",
     "sql": "-- Roll up all items in an order into a ranked JSON array\nSELECT JSON_ARRAYAGG(\n  JSON_OBJECT('product' VALUE jt.product,\n              'total'   VALUE jt.quantity * jt.unit_price\n              RETURNING JSON)\n  ORDER BY jt.quantity * jt.unit_price DESC\n  RETURNING JSON\n) AS items_ranked\nFROM   orders o,\n       JSON_TABLE(o.order_doc, '$.items[*]'\n         COLUMNS (product VARCHAR2(100) PATH '$.product',\n                  quantity NUMBER PATH '$.quantity',\n                  unit_price NUMBER PATH '$.unitPrice')) jt;"
   },
   {
-    "id": "sql-0044",
-    "line": 931,
+    "id": "sql-0043",
+    "line": 930,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "JSON_ARRAYAGG and JSON_OBJECTAGG: Aggregation into JSON",
     "sql": "-- Turn a settings table into a JSON config object\nSELECT JSON_OBJECTAGG(setting_name VALUE setting_value RETURNING JSON) AS config\nFROM   user_settings\nWHERE  user_id = 42;\n-- {\"theme\":\"dark\",\"language\":\"en\",\"timezone\":\"America/Chicago\"}"
   },
   {
-    "id": "sql-0045",
-    "line": 959,
+    "id": "sql-0044",
+    "line": 958,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "The FORMAT JSON Clause",
     "sql": "WITH item_array AS (\n  SELECT JSON_ARRAYAGG(\n    JSON_OBJECT('product' VALUE jt.product RETURNING JSON)\n    RETURNING JSON\n  ) AS items_json\n  FROM orders o,\n       JSON_TABLE(o.order_doc, '$.items[*]'\n         COLUMNS (product VARCHAR2(100) PATH '$.product')) jt\n)\nSELECT JSON_OBJECT(\n  'orderItems' VALUE items_json     -- Already JSON, no FORMAT JSON needed\n  RETURNING JSON\n) FROM item_array;"
   },
   {
-    "id": "sql-0046",
-    "line": 981,
+    "id": "sql-0045",
+    "line": 980,
     "section": "8. Building JSON: The Construction Functions",
     "subsection": "The FORMAT JSON Clause",
     "sql": "SELECT JSON_OBJECT(\n  'payload' VALUE legacy_text_column FORMAT JSON   -- Trust me, this is JSON\n  RETURNING JSON\n) FROM legacy_table;"
   },
   {
-    "id": "sql-0047",
-    "line": 1008,
+    "id": "sql-0046",
+    "line": 1007,
     "section": "9. Transforming JSON In-Place",
     "subsection": "JSON_TRANSFORM: The Swiss Army Knife",
     "sql": "-- Multiple operations in a single call\nSELECT JSON_TRANSFORM(o.order_doc,\n  SET    '$.status'      = 'delivered',\n  SET    '$.deliveredAt'  = SYSTIMESTAMP,\n  REMOVE '$.priority',\n  RENAME '$.customer'     = 'customerName',\n  APPEND '$.tags'         = 'completed'\n  RETURNING VARCHAR2(4000) PRETTY\n)\nFROM orders o;"
   },
   {
-    "id": "sql-0048",
-    "line": 1037,
+    "id": "sql-0047",
+    "line": 1036,
     "section": "9. Transforming JSON In-Place",
     "subsection": "JSON_TRANSFORM: The Swiss Army Knife",
     "sql": "-- Only stamp createdAt if it's not already there (won't overwrite existing audits)\nUPDATE orders SET order_doc = JSON_TRANSFORM(order_doc,\n  INSERT '$.audit.createdAt' = SYSTIMESTAMP   -- create the path if missing\n  IGNORE ON EXISTING                          -- skip silently if already set\n  RETURNING JSON\n);"
   },
   {
-    "id": "sql-0049",
-    "line": 1054,
+    "id": "sql-0048",
+    "line": 1053,
     "section": "9. Transforming JSON In-Place",
     "subsection": "26ai Enhancements: NESTED PATH and CASE",
     "sql": "-- Apply 10% discount to every item\nSELECT JSON_TRANSFORM(o.order_doc,\n  NESTED PATH '$.items[*]'\n    SET '@.discountedPrice' = '@.unitPrice * 0.9'\n  RETURNING VARCHAR2(4000) PRETTY\n)\nFROM orders o;"
   },
   {
-    "id": "sql-0050",
-    "line": 1066,
+    "id": "sql-0049",
+    "line": 1065,
     "section": "9. Transforming JSON In-Place",
     "subsection": "26ai Enhancements: NESTED PATH and CASE",
     "sql": "SELECT JSON_TRANSFORM(o.order_doc,\n  CASE\n    WHEN '$.status' = '\"shipped\"'\n      THEN SET '$.trackable' = true\n    ELSE\n      SET '$.trackable' = false\n  END\n  RETURNING VARCHAR2(4000) PRETTY\n)\nFROM orders o;"
   },
   {
-    "id": "sql-0051",
-    "line": 1085,
+    "id": "sql-0050",
+    "line": 1084,
     "section": "9. Transforming JSON In-Place",
     "subsection": "JSON_MERGEPATCH: The Simple Alternative",
     "sql": "-- Update status, add a field, remove a field (set to null)\nUPDATE orders SET order_doc = JSON_MERGEPATCH(\n  order_doc,\n  '{\"status\": \"delivered\", \"trackingUrl\": \"https://track.example.com/1001\", \"priority\": null}'\n);"
   },
   {
-    "id": "sql-0052",
-    "line": 1103,
+    "id": "sql-0051",
+    "line": 1102,
     "section": "10. Putting It All Together: The CTE Pipeline",
     "subsection": null,
-    "sql": "WITH\n-- Step 1: Flatten JSON orders into relational rows\norder_lines AS (\n  SELECT o.id                                         AS order_pk,\n         JSON_VALUE(o.order_doc, '$.orderId'\n                    RETURNING NUMBER)                  AS order_id,\n         JSON_VALUE(o.order_doc, '$.customer')         AS customer,\n         JSON_VALUE(o.order_doc, '$.orderDate'\n                    RETURNING DATE)                    AS order_date,\n         jt.product,\n         jt.quantity,\n         jt.unit_price,\n         jt.category\n  FROM   orders o,\n         JSON_TABLE(o.order_doc, '$.items[*]'\n           COLUMNS (\n             product    VARCHAR2(100) PATH '$.product',\n             quantity   NUMBER        PATH '$.quantity',\n             unit_price NUMBER        PATH '$.unitPrice',\n             category   VARCHAR2(50)  PATH '$.category'\n           )\n         ) jt\n),\n\n-- Step 2: Enrich with relational product catalog\nenriched AS (\n  SELECT ol.*,\n         p.supplier,\n         p.weight_kg,\n         ol.quantity * ol.unit_price AS line_total\n  FROM   order_lines ol\n  LEFT JOIN products p ON p.product_name = ol.product\n),\n\n-- Step 3: Aggregate by category\ncategory_summary AS (\n  SELECT customer,\n         category,\n         SUM(line_total)   AS category_total,\n         SUM(quantity)      AS units_sold\n  FROM   enriched\n  GROUP  BY customer, category\n)\n\n-- Step 4: Construct the JSON API response\nSELECT JSON_OBJECT(\n  'customer'   VALUE cs.customer,\n  'categories' VALUE JSON_ARRAYAGG(\n    JSON_OBJECT(\n      'category' VALUE cs.category,\n      'total'    VALUE cs.category_total,\n      'units'    VALUE cs.units_sold\n      RETURNING JSON\n    )\n    ORDER BY cs.category_total DESC\n    RETURNING JSON\n  )\n  RETURNING JSON\n) AS api_response\nFROM   category_summary cs\nGROUP  BY cs.customer;"
+    "sql": "WITH\n-- Step 1: Flatten JSON orders into relational rows\norder_lines AS (\n  SELECT o.id                                         AS order_pk,\n         JSON_VALUE(o.order_doc, '$.orderId'\n                    RETURNING NUMBER)                  AS order_id,\n         JSON_VALUE(o.order_doc, '$.customer.name')    AS customer,\n         JSON_VALUE(o.order_doc, '$.orderDate'\n                    RETURNING DATE)                    AS order_date,\n         jt.product,\n         jt.quantity,\n         jt.unit_price,\n         jt.category\n  FROM   orders o,\n         JSON_TABLE(o.order_doc, '$.items[*]'\n           COLUMNS (\n             product    VARCHAR2(100) PATH '$.product',\n             quantity   NUMBER        PATH '$.quantity',\n             unit_price NUMBER        PATH '$.unitPrice',\n             category   VARCHAR2(50)  PATH '$.category'\n           )\n         ) jt\n),\n\n-- Step 2: Enrich with relational product catalog\nenriched AS (\n  SELECT ol.*,\n         p.supplier,\n         p.weight_kg,\n         ol.quantity * ol.unit_price AS line_total\n  FROM   order_lines ol\n  LEFT JOIN products p ON p.product_name = ol.product\n),\n\n-- Step 3: Aggregate by category\ncategory_summary AS (\n  SELECT customer,\n         category,\n         SUM(line_total)   AS category_total,\n         SUM(quantity)      AS units_sold\n  FROM   enriched\n  GROUP  BY customer, category\n)\n\n-- Step 4: Construct the JSON API response\nSELECT JSON_OBJECT(\n  'customer'   VALUE cs.customer,\n  'categories' VALUE JSON_ARRAYAGG(\n    JSON_OBJECT(\n      'category' VALUE cs.category,\n      'total'    VALUE cs.category_total,\n      'units'    VALUE cs.units_sold\n      RETURNING JSON\n    )\n    ORDER BY cs.category_total DESC\n    RETURNING JSON\n  )\n  RETURNING JSON\n) AS api_response\nFROM   category_summary cs\nGROUP  BY cs.customer;"
   },
   {
-    "id": "sql-0053",
-    "line": 1186,
+    "id": "sql-0052",
+    "line": 1185,
     "section": "10. Putting It All Together: The CTE Pipeline",
     "subsection": "The Multi-Model Query",
     "sql": "WITH\nsemantic_matches AS (\n  -- Vector similarity search\n  SELECT doc_id, chunk_text,\n         VECTOR_DISTANCE(embedding, :query_vector, COSINE) AS score\n  FROM   knowledge_base\n  ORDER  BY score\n  FETCH  FIRST 20 ROWS ONLY\n),\ngraph_context AS (\n  -- Graph traversal (SQL/PGQ)\n  SELECT v1.name AS entity, v2.name AS related, e.rel_type\n  FROM   GRAPH_TABLE(knowledge_graph\n           MATCH (v1) -[e]-> (v2)\n           WHERE v1.doc_id IN (SELECT doc_id FROM semantic_matches)\n           COLUMNS (v1.name, v2.name, e.rel_type)\n         )\n),\nenriched AS (\n  -- Relational metadata\n  SELECT s.doc_id, s.score, d.title, d.author\n  FROM   semantic_matches s\n  JOIN   documents d ON d.id = s.doc_id\n)\nSELECT JSON_OBJECT(\n  'results' VALUE (\n    SELECT JSON_ARRAYAGG(\n      JSON_OBJECT(\n        'title'     VALUE e.title,\n        'score'     VALUE ROUND(e.score, 4),\n        'relations' VALUE (\n          SELECT JSON_ARRAYAGG(\n            JSON_OBJECT('entity' VALUE g.entity,\n                        'related' VALUE g.related,\n                        'type' VALUE g.rel_type\n                        RETURNING JSON)\n            RETURNING JSON\n          )\n          FROM graph_context g\n        )\n        RETURNING JSON\n      ) ORDER BY e.score\n      RETURNING JSON\n    ) FROM enriched e\n  )\n  RETURNING JSON\n) AS rag_context\nFROM DUAL;"
   },
   {
-    "id": "sql-0054",
-    "line": 1311,
+    "id": "sql-0053",
+    "line": 1310,
     "section": "11. Indexing and Performance",
     "subsection": "Functional Indexes on JSON_VALUE",
-    "sql": "CREATE INDEX idx_order_status ON orders (\n  JSON_VALUE(order_doc, '$.status' RETURNING VARCHAR2(20) ERROR ON ERROR)\n);\n\n-- Composite index across multiple JSON fields\nCREATE INDEX idx_order_cust_date ON orders (\n  JSON_VALUE(order_doc, '$.customer' RETURNING VARCHAR2(100)),\n  JSON_VALUE(order_doc, '$.orderDate' RETURNING DATE)\n);"
+    "sql": "CREATE INDEX idx_order_status ON orders (\n  JSON_VALUE(order_doc, '$.status' RETURNING VARCHAR2(20) ERROR ON ERROR)\n);\n\n-- Composite index across multiple JSON fields\nCREATE INDEX idx_order_cust_date ON orders (\n  JSON_VALUE(order_doc, '$.customer.name' RETURNING VARCHAR2(100)),\n  JSON_VALUE(order_doc, '$.orderDate' RETURNING DATE)\n);"
   },
   {
-    "id": "sql-0055",
-    "line": 1325,
+    "id": "sql-0054",
+    "line": 1324,
     "section": "11. Indexing and Performance",
     "subsection": "Functional Indexes on JSON_VALUE",
     "sql": "CREATE INDEX idx_order_customer ON orders o (\n  o.order_doc.customer.string()\n);"
   },
   {
-    "id": "sql-0056",
-    "line": 1343,
+    "id": "sql-0055",
+    "line": 1342,
     "section": "11. Indexing and Performance",
     "subsection": "Functional Indexes on JSON_VALUE",
     "sql": "-- Index for string comparisons: WHERE amount.string() = '100.00'\nCREATE INDEX idx_amount_str ON orders o (o.order_doc.amount.string());\n\n-- Index for numeric comparisons: WHERE amount.number() > 100\nCREATE INDEX idx_amount_num ON orders o (o.order_doc.amount.number());"
   },
   {
-    "id": "sql-0057",
-    "line": 1361,
+    "id": "sql-0056",
+    "line": 1360,
     "section": "11. Indexing and Performance",
     "subsection": "JSON Search Indexes: Index Everything, Query Anywhere",
     "sql": "CREATE SEARCH INDEX idx_orders_search ON orders (order_doc) FOR JSON;"
   },
   {
-    "id": "sql-0058",
-    "line": 1389,
+    "id": "sql-0057",
+    "line": 1388,
     "section": "11. Indexing and Performance",
     "subsection": "JSON Search Indexes: Index Everything, Query Anywhere",
     "sql": "-- Transactional (default)\nCREATE SEARCH INDEX idx_orders_search ON orders (order_doc) FOR JSON\n  PARAMETERS ('SYNC (ON COMMIT)');\n\n-- Or periodic, if you'd rather trade freshness for write throughput\nCREATE SEARCH INDEX idx_orders_search ON orders (order_doc) FOR JSON\n  PARAMETERS ('SYNC (EVERY \"FREQ=SECONDLY; INTERVAL=1\")');"
   },
   {
-    "id": "sql-0059",
-    "line": 1415,
+    "id": "sql-0058",
+    "line": 1414,
     "section": "11. Indexing and Performance",
     "subsection": "Multivalue Indexes (21c+)",
     "sql": "CREATE MULTIVALUE INDEX idx_order_tags ON orders o (\n  o.order_doc.tags.string()\n);\n\n-- This query uses the multivalue index\nSELECT * FROM orders o\nWHERE  JSON_EXISTS(o.order_doc, '$.tags[*]?(@.string() == \"wholesale\")');"
   },
   {
-    "id": "sql-0060",
-    "line": 1429,
+    "id": "sql-0059",
+    "line": 1428,
     "section": "11. Indexing and Performance",
     "subsection": "Multivalue Indexes (21c+)",
     "sql": "-- Tags queried as strings\nCREATE MULTIVALUE INDEX idx_tags_str ON orders o (o.order_doc.tags.string());\n\n-- Numeric IDs queried as numbers\nCREATE MULTIVALUE INDEX idx_ids_num  ON orders o (o.order_doc.relatedIds.number());"
   },
   {
-    "id": "sql-0061",
-    "line": 1458,
+    "id": "sql-0060",
+    "line": 1457,
     "section": "11. Indexing and Performance",
     "subsection": "Multivalue Indexes (21c+)",
     "sql": "-- Both \"123\" and 123 are indexed as the string \"123\"\nCREATE MULTIVALUE INDEX idx_tags_str ON orders o (o.order_doc.tags.string());\n\n-- Both \"123\" and 123 are indexed as the number 123\nCREATE MULTIVALUE INDEX idx_tags_num ON orders o (o.order_doc.tags.number());"
   },
   {
-    "id": "sql-0062",
-    "line": 1478,
+    "id": "sql-0061",
+    "line": 1477,
     "section": "11. Indexing and Performance",
     "subsection": "Partial Indexes: Exclude NULL, Route Writes",
     "sql": "CREATE INDEX idx_shipped_tracking ON orders (\n  JSON_VALUE(order_doc, '$.trackingUrl' RETURNING VARCHAR2(200))\n)\nWHERE JSON_VALUE(order_doc, '$.status') = 'shipped';"
   },
   {
-    "id": "sql-0063",
-    "line": 1495,
+    "id": "sql-0062",
+    "line": 1494,
     "section": "11. Indexing and Performance",
     "subsection": "Pattern: Type-Routed Indexes for Polymorphic Documents",
     "sql": "-- Schema version routing\nCREATE INDEX idx_amount_v1 ON orders (\n  JSON_VALUE(order_doc, '$.amount' RETURNING VARCHAR2(30))\n)\nWHERE JSON_VALUE(order_doc, '$.schemaVersion') = '1';\n\nCREATE INDEX idx_amount_v2 ON orders (\n  JSON_VALUE(order_doc, '$.amount' RETURNING NUMBER)\n)\nWHERE JSON_VALUE(order_doc, '$.schemaVersion') = '2';"
   },
   {
-    "id": "sql-0064",
-    "line": 1512,
+    "id": "sql-0063",
+    "line": 1511,
     "section": "11. Indexing and Performance",
     "subsection": "Pattern: Type-Routed Indexes for Polymorphic Documents",
     "sql": "-- One table, multiple entity types, write-path-isolated indexes\nCREATE INDEX idx_customer_name ON entities (\n  JSON_VALUE(doc, '$.companyName' RETURNING VARCHAR2(200))\n)\nWHERE JSON_VALUE(doc, '$.entityType') = 'customer';\n\nCREATE INDEX idx_product_sku ON entities (\n  JSON_VALUE(doc, '$.sku' RETURNING VARCHAR2(50))\n)\nWHERE JSON_VALUE(doc, '$.entityType') = 'product';\n\nCREATE INDEX idx_invoice_number ON entities (\n  JSON_VALUE(doc, '$.invoiceNo' RETURNING NUMBER)\n)\nWHERE JSON_VALUE(doc, '$.entityType') = 'invoice';"
   },
   {
-    "id": "sql-0065",
-    "line": 1562,
+    "id": "sql-0064",
+    "line": 1561,
     "section": "12. The Bigger Picture",
     "subsection": "JSON Schema Validation (26ai)",
     "sql": "CREATE TABLE validated_orders (\n  id   NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n  data JSON VALIDATE '{\n    \"type\": \"object\",\n    \"properties\": {\n      \"orderId\":  {\"type\": \"number\"},\n      \"customer\": {\"type\": \"string\"},\n      \"items\":    {\"type\": \"array\", \"items\": {\n        \"type\": \"object\",\n        \"required\": [\"product\", \"quantity\"]\n      }}\n    },\n    \"required\": [\"orderId\", \"customer\", \"items\"]\n  }'\n);"
   },
   {
-    "id": "sql-0066",
-    "line": 1586,
+    "id": "sql-0065",
+    "line": 1585,
     "section": "12. The Bigger Picture",
     "subsection": "JSON_SERIALIZE: Making Binary Readable",
     "sql": "-- Pretty print with alphabetically sorted keys (26ai)\nSELECT JSON_SERIALIZE(order_doc ORDERED PRETTY) FROM orders;"
   },
   {
-    "id": "sql-0067",
-    "line": 1597,
+    "id": "sql-0066",
+    "line": 1596,
     "section": "12. The Bigger Picture",
     "subsection": "JSON Relational Duality Views: The UMT Implementation",
     "sql": "CREATE JSON RELATIONAL DUALITY VIEW order_dv AS\n  SELECT JSON {\n    'orderId'  : o.order_id,\n    'customer' : o.customer_name,\n    'items'    : [ SELECT JSON {\n                     'product'  : i.product_name,\n                     'quantity' : i.quantity,\n                     'price'    : i.unit_price\n                   }\n                   FROM order_items i WITH UPDATE\n                   WHERE i.order_id = o.order_id ]\n  }\n  FROM orders o WITH INSERT UPDATE DELETE;"

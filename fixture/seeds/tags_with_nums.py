@@ -13,20 +13,30 @@ from typing import Any
 _ORDERS: list[dict[str, Any]] = [
     {
         "orderId": 2001,
-        "customer": "Lambda LLC",
+        "customer": {
+            "name": "Lambda LLC",
+            "tier": "gold",
+            "address": {"city": "Remote", "state": "NV", "zip": "89101"},
+        },
         "status": "shipped",
-        "amount": 100.0,
-        "items": [{"sku": "GIZMO-100", "quantity": 1, "unitPrice": 100.0}],
-        "shipping": {"method": "ground", "address": {"city": "Remote", "state": "NV"}},
+        "priority": "normal",
+        "orderDate": "2025-04-01",
+        "items": [{"product": "Gizmo 100", "quantity": 1, "unitPrice": 100.0, "category": "hardware"}],
+        "shipping": {"method": "ground", "address": {"city": "Remote", "state": "NV", "zip": "89101"}},
         "tags": [1, "priority", 42, "b2b"],
     },
     {
         "orderId": 2002,
-        "customer": "Mu Holdings",
+        "customer": {
+            "name": "Mu Holdings",
+            "tier": "silver",
+            "address": {"city": "Elsewhere", "state": "TX", "zip": "75001"},
+        },
         "status": "shipped",
-        "amount": 250.0,
-        "items": [{"sku": "GIZMO-250", "quantity": 2, "unitPrice": 125.0}],
-        "shipping": {"method": "ground", "address": {"city": "Elsewhere", "state": "TX"}},
+        "priority": "high",
+        "orderDate": "2025-04-02",
+        "items": [{"product": "Gizmo 250", "quantity": 2, "unitPrice": 125.0, "category": "hardware"}],
+        "shipping": {"method": "ground", "address": {"city": "Elsewhere", "state": "TX", "zip": "75001"}},
         "tags": [100, 200, "research"],
     },
 ]
@@ -36,8 +46,8 @@ def load(conn: Any) -> None:
     cur = conn.cursor()
     try:
         cur.executemany(
-            "INSERT INTO orders (order_id, order_doc) VALUES (:1, :2)",
-            [(o["orderId"], json.dumps(o)) for o in _ORDERS],
+            "INSERT INTO orders (order_doc) VALUES (:1)",
+            [(json.dumps(o),) for o in _ORDERS],
         )
         conn.commit()
     finally:

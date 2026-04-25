@@ -151,8 +151,8 @@ def test_runner_rolls_back_dml_between_snippets_via_savepoint(loaded: Any) -> No
     runner.execute(
         [
             _mk(
-                "INSERT INTO orders (order_id, order_doc) "
-                "VALUES (9999, JSON('{\"orderId\": 9999}'))",
+                "INSERT INTO orders (order_doc) "
+                "VALUES (JSON('{\"orderId\": 9999}'))",
                 id="sql-0001",
             ),
             _mk("SELECT COUNT(*) FROM orders", id="sql-0002"),
@@ -216,7 +216,7 @@ def test_runner_splits_multi_statement_block_and_records_per_statement_outcomes(
 ) -> None:
     sql = (
         "SELECT COUNT(*) FROM orders;\n"
-        "SELECT customer FROM orders FETCH FIRST 1 ROW ONLY"
+        "SELECT id FROM orders FETCH FIRST 1 ROW ONLY"
     )
     runner = Runner(_factory(loaded))
     results = runner.execute([_mk(sql)])

@@ -18,38 +18,50 @@ from typing import Any
 _ORDERS: list[dict[str, Any]] = [
     {
         "orderId": 4001,
-        "customer": "Omicron Systems",
+        "customer": {
+            "name": "Omicron Systems",
+            "tier": "gold",
+            "address": {"city": "San Jose", "state": "CA", "zip": "95110"},
+        },
         "status": "shipped",
-        "amount": 540.00,
+        "priority": "normal",
         "orderDate": "2026-02-03",
         "orderPlacedAt": "2026-02-03T09:15:00-08:00",
         "shippingWindow": "P2DT4H",
-        "items": [{"sku": "DATETIME-1", "quantity": 1, "unitPrice": 540.00}],
-        "shipping": {"method": "ground", "address": {"city": "San Jose", "state": "CA"}},
+        "items": [{"product": "Datetime 1", "quantity": 1, "unitPrice": 540.00, "category": "hardware"}],
+        "shipping": {"method": "ground", "address": {"city": "San Jose", "state": "CA", "zip": "95110"}},
         "tags": ["dated"],
     },
     {
         "orderId": 4002,
-        "customer": "Pi Networks",
+        "customer": {
+            "name": "Pi Networks",
+            "tier": "silver",
+            "address": {"city": "New York", "state": "NY", "zip": "10001"},
+        },
         "status": "pending",
-        "amount": 1280.00,
+        "priority": "high",
         "orderDate": "2026-02-10",
         "orderPlacedAt": "2026-02-10T14:42:00+00:00",
         "shippingWindow": "P5D",
-        "items": [{"sku": "DATETIME-2", "quantity": 2, "unitPrice": 640.00}],
-        "shipping": {"method": "express", "address": {"city": "New York", "state": "NY"}},
+        "items": [{"product": "Datetime 2", "quantity": 2, "unitPrice": 640.00, "category": "hardware"}],
+        "shipping": {"method": "express", "address": {"city": "New York", "state": "NY", "zip": "10001"}},
         "tags": ["dated", "priority"],
     },
     {
         "orderId": 4003,
-        "customer": "Rho Analytics",
+        "customer": {
+            "name": "Rho Analytics",
+            "tier": "gold",
+            "address": {"city": "Atlanta", "state": "GA", "zip": "30303"},
+        },
         "status": "shipped",
-        "amount": 99.00,
+        "priority": "normal",
         "orderDate": "2026-02-14",
         "orderPlacedAt": "2026-02-14T22:01:00-05:00",
         "shippingWindow": "PT36H",
-        "items": [{"sku": "DATETIME-3", "quantity": 3, "unitPrice": 33.00}],
-        "shipping": {"method": "ground", "address": {"city": "Atlanta", "state": "GA"}},
+        "items": [{"product": "Datetime 3", "quantity": 3, "unitPrice": 33.00, "category": "hardware"}],
+        "shipping": {"method": "ground", "address": {"city": "Atlanta", "state": "GA", "zip": "30303"}},
         "tags": ["dated"],
     },
 ]
@@ -59,8 +71,8 @@ def load(conn: Any) -> None:
     cur = conn.cursor()
     try:
         cur.executemany(
-            "INSERT INTO orders (order_id, order_doc) VALUES (:1, :2)",
-            [(o["orderId"], json.dumps(o)) for o in _ORDERS],
+            "INSERT INTO orders (order_doc) VALUES (:1)",
+            [(json.dumps(o),) for o in _ORDERS],
         )
         conn.commit()
     finally:

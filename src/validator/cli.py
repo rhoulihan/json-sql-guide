@@ -19,8 +19,9 @@ from rich.console import Console
 
 from validator import __version__
 from validator.diff import diff_exit_code, diff_results, render_diff_md
-from validator.directives import apply_directives
+from validator.directives import apply_directives, load_sidecar
 from validator.extractor import extract_file
+from validator.fixture import FixtureLoader
 from validator.reporter import (
     dump_json,
     render_annotated,
@@ -66,14 +67,49 @@ def extract(source: Path, output: Path | None) -> None:
     help="Directory to write junit.xml, results.json, annotated MD.",
 )
 @click.option("--fast-fail", is_flag=True, help="Stop on first failure.")
-def run(source: Path, out_dir: Path, fast_fail: bool) -> None:
+@click.option(
+    "--overrides",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("docs/sql-overrides.yaml"),
+    help="Sidecar YAML with per-snippet directives. Skipped if missing.",
+)
+@click.option(
+    "--fixture-profile",
+    "fixture_profiles",
+    multiple=True,
+    default=(
+        "base",
+        "tags_with_nums",
+        "deep_nest",
+        "dates_and_intervals",
+        "hybrid",
+        "events",
+        "user_settings",
+        "legacy",
+    ),
+    help="Seed profiles to load before running. Repeatable. Pass once with empty value to skip fixture load.",
+)
+def run(
+    source: Path,
+    out_dir: Path,
+    fast_fail: bool,
+    overrides: Path,
+    fixture_profiles: tuple[str, ...],
+) -> None:
     """Extract → direct → execute → report."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
     snippets = extract_file(source)
-    directed = [apply_directives(s, sidecar_overrides={}) for s in snippets]
+    sidecar = load_sidecar(overrides)
+    directed = [apply_directives(s, sidecar_overrides=sidecar) for s in snippets]
 
     conn_factory = _make_oracle_factory()
+
+    profiles = [p for p in fixture_profiles if p]
+    if profiles:
+        loader_conn = conn_factory("default")
+        FixtureLoader(loader_conn, profiles=list(profiles)).load()
+
     runner = Runner(
         conn_factory,
         options=_runner_options(fast_fail=fast_fail),
