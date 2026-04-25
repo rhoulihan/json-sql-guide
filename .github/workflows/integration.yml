@@ -18,7 +18,7 @@ jobs:
 
     services:
       oracle:
-        image: gvenzl/oracle-free:23.26.0-slim-faststart
+        image: gvenzl/oracle-free:23.26.0-faststart
         env:
           ORACLE_PASSWORD: oraclepw
           APP_USER: validator
@@ -58,11 +58,12 @@ jobs:
       - name: Grant validator extra privileges
         # gvenzl auto-creates ``validator`` with CONNECT + RESOURCE via
         # APP_USER. The integration tests also need view + sequence DDL
-        # plus dictionary read for the FixtureLoader's introspection.
+        # plus dictionary read for the FixtureLoader's introspection,
+        # and CTXAPP for the §11 ``CREATE SEARCH INDEX`` examples.
         run: |
           docker exec -i "${{ job.services.oracle.id }}" sqlplus -s system/oraclepw@//localhost:1521/FREEPDB1 <<'SQL'
           GRANT CREATE VIEW, CREATE MATERIALIZED VIEW, CREATE PROCEDURE,
-                CREATE SEQUENCE, SELECT ANY DICTIONARY TO validator;
+                CREATE SEQUENCE, SELECT ANY DICTIONARY, CTXAPP TO validator;
           EXIT
           SQL
       - name: pytest integration

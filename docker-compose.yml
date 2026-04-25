@@ -1,13 +1,15 @@
 # Oracle AI Database 26ai Free for the validator.
 #
-# Uses gvenzl's faststart 23.26 image (boots in ~30s vs 3+ min for the
-# official container-registry.oracle.com/database/free image). Note:
-# the slim image does NOT include Oracle Text, so the §11 search-index
-# examples in the guide fail with ORA-29833. Switch to the official
-# image if you need to validate those.
+# Uses gvenzl's full faststart 23.26 image — boots in ~30s vs 3+ min
+# for the official ``container-registry.oracle.com/database/free``
+# image and ships every optional component the guide exercises,
+# including Oracle Text (needed for the §11 ``CREATE SEARCH INDEX``
+# examples). Switch to ``-slim-faststart`` if image size matters more
+# than full feature coverage; that variant strips Oracle Text and the
+# search-index snippets will fail with ORA-29833.
 services:
   oracle:
-    image: gvenzl/oracle-free:23.26.0-slim-faststart
+    image: gvenzl/oracle-free:23.26.0-faststart
     container_name: json-sql-guide-oracle
     shm_size: 1g
     ports:

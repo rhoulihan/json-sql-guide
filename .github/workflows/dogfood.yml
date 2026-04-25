@@ -38,7 +38,7 @@ jobs:
 
     services:
       oracle:
-        image: gvenzl/oracle-free:23.26.0-slim-faststart
+        image: gvenzl/oracle-free:23.26.0-faststart
         env:
           ORACLE_PASSWORD: oraclepw
           APP_USER: validator
@@ -93,14 +93,14 @@ jobs:
       - name: Grant validator extra privileges
         # gvenzl auto-creates ``validator`` with CONNECT + RESOURCE via
         # APP_USER. The dogfood run also needs view/sequence/procedure
-        # DDL plus dictionary read for FixtureLoader introspection. The
-        # ``CREATE SEARCH INDEX`` examples (§11) require Oracle Text,
-        # which the slim image doesn't ship — those snippets fail with
-        # ORA-29833 and are surfaced in the dogfood report.
+        # DDL plus dictionary read for FixtureLoader introspection, and
+        # CTXAPP for the §11 ``CREATE SEARCH INDEX`` examples. The
+        # non-slim faststart image ships Oracle Text, so those snippets
+        # now run cleanly instead of failing with ORA-29833.
         run: |
           docker exec -i "${{ job.services.oracle.id }}" sqlplus -s system/oraclepw@//localhost:1521/FREEPDB1 <<'SQL'
           GRANT CREATE VIEW, CREATE MATERIALIZED VIEW, CREATE PROCEDURE,
-                CREATE SEQUENCE, SELECT ANY DICTIONARY TO validator;
+                CREATE SEQUENCE, SELECT ANY DICTIONARY, CTXAPP TO validator;
           EXIT
           SQL
 

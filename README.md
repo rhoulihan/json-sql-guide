@@ -76,7 +76,7 @@ uv run validator diff previous.json current.json [--format md|json] [-o diff.md]
 
 ## Important environment note
 
-The validator's `CREATE SEARCH INDEX` examples (§11 of the guide) require **Oracle Text** (CTXSYS), which is shipped with the official `container-registry.oracle.com/database/free` image but **not** with the smaller `gvenzl/oracle-free:*-faststart` images. If you use the gvenzl image you'll see `ORA-29833 indextype does not exist` on those two snippets; everything else still passes.
+The validator's `CREATE SEARCH INDEX` examples (§11 of the guide) require **Oracle Text** (CTXSYS). The default `gvenzl/oracle-free:23.26.0-faststart` image used by the workflows ships Oracle Text out of the box, and the workflows grant `CTXAPP` to the validator user during setup. The slimmer `*-slim-faststart` variant strips Oracle Text — if you swap to that image you'll see `ORA-29833 indextype does not exist` on those two snippets; everything else still passes.
 
 ## Repository layout
 
