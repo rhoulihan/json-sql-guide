@@ -150,20 +150,39 @@ class Runner:
         role = "dba" if Directive.RUNS_AS_DBA in directed.directives else "default"
         conn = self._get_conn(role)
 
+        # One savepoint for the whole snippet so multi-statement blocks
+        # see each other's DML (e.g. INSERTs that the duality-view example
+        # depends on). The snippet-level savepoint rolls back at the end
+        # so the next snippet starts from the fixture state.
+        savepoint = self._next_savepoint()
+        cur = conn.cursor()
+        try:
+            cur.execute(f"SAVEPOINT {savepoint}")
+        finally:
+            cur.close()
+
         results: list[Result] = []
-        for i, stmt in enumerate(statements, start=1):
-            stmt_id = f"{snippet.id}[{i}]" if multi else snippet.id
-            result = self._execute_statement(
-                conn=conn,
-                stmt=stmt,
-                snippet_id=stmt_id,
-                line=snippet.line,
-                classification=classification_str,
-                expected_error_code=directed.directives.expected_error_code,
-                wrapped_sql=wrapped_sql_for_result,
-                artifacts=artifacts,
-            )
-            results.append(result)
+        try:
+            for i, stmt in enumerate(statements, start=1):
+                stmt_id = f"{snippet.id}[{i}]" if multi else snippet.id
+                result = self._execute_statement(
+                    conn=conn,
+                    stmt=stmt,
+                    snippet_id=stmt_id,
+                    line=snippet.line,
+                    classification=classification_str,
+                    expected_error_code=directed.directives.expected_error_code,
+                    wrapped_sql=wrapped_sql_for_result,
+                    artifacts=artifacts,
+                )
+                results.append(result)
+        finally:
+            cur = conn.cursor()
+            try:
+                with contextlib.suppress(Exception):
+                    cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            finally:
+                cur.close()
         return results
 
     def _prepare_sql(
@@ -199,19 +218,23 @@ class Runner:
         wrapped_sql: str | None,
         artifacts: list[_DDLArtifact],
     ) -> Result:
-        savepoint = self._next_savepoint()
         cur = conn.cursor()
         start_ns = time.perf_counter_ns()
         try:
-            cur.execute(f"SAVEPOINT {savepoint}")
+            # If this is a CREATE that names an existing object, drop it
+            # first so the guide's examples are idempotent across re-runs
+            # and across same-name redefinitions in later sections.
+            pre_artifact = _parse_ddl_artifact(stmt)
+            if pre_artifact is not None:
+                with contextlib.suppress(Exception):
+                    cur.execute(_drop_statement(pre_artifact))
             cur.execute(stmt)
             rows_returned = _try_fetch_count(cur)
             elapsed_ms = _elapsed_ms(start_ns)
 
             # Track any DDL artifact we just created for teardown.
-            artifact = _parse_ddl_artifact(stmt)
-            if artifact is not None:
-                artifacts.append(artifact)
+            if pre_artifact is not None:
+                artifacts.append(pre_artifact)
 
             if expected_error_code is not None:
                 # Expected an error but got success — fail.
@@ -256,12 +279,6 @@ class Runner:
                 wrapped_sql=wrapped_sql,
             )
         finally:
-            # Always roll back to the savepoint so DML is invisible
-            # to later snippets. DDL already auto-committed; teardown
-            # handles those artifacts, and the rollback here may no
-            # longer find a valid savepoint — either is harmless.
-            with contextlib.suppress(Exception):
-                cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
             cur.close()
 
     # ───────── helpers ─────────
@@ -334,7 +351,8 @@ def _extract_oracle_error(exc: Exception) -> tuple[str | None, str]:
 
 
 def _split_statements(sql: str) -> list[str]:
-    """Split on ``;`` at top level, respecting single-quoted strings.
+    """Split on ``;`` at top level, respecting single-quoted strings
+    and ``--`` line comments.
 
     Leaves PL/SQL blocks alone — they should arrive already wrapped
     with an explicit ``@wrap-as`` directive or be passed in as a single
@@ -346,9 +364,16 @@ def _split_statements(sql: str) -> list[str]:
     parts: list[str] = []
     buf: list[str] = []
     in_string = False
+    in_line_comment = False
     i = 0
     while i < len(sql):
         ch = sql[i]
+        if in_line_comment:
+            buf.append(ch)
+            if ch == "\n":
+                in_line_comment = False
+            i += 1
+            continue
         if ch == "'":
             # handle '' escaped quote inside a string
             if in_string and i + 1 < len(sql) and sql[i + 1] == "'":
@@ -356,6 +381,15 @@ def _split_statements(sql: str) -> list[str]:
                 i += 2
                 continue
             in_string = not in_string
+            buf.append(ch)
+        elif (
+            not in_string
+            and ch == "-"
+            and i + 1 < len(sql)
+            and sql[i + 1] == "-"
+        ):
+            # Start of a ``--`` line comment — copy verbatim until newline.
+            in_line_comment = True
             buf.append(ch)
         elif ch == ";" and not in_string:
             stmt = "".join(buf).strip()
@@ -379,6 +413,14 @@ def _split_statements(sql: str) -> list[str]:
 
 
 _DDL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "PROPERTY GRAPH",
+        re.compile(
+            r"^\s*CREATE(?:\s+OR\s+REPLACE)?\s+PROPERTY\s+GRAPH\s+"
+            r"([A-Za-z_][A-Za-z0-9_$#.]*)",
+            re.IGNORECASE,
+        ),
+    ),
     (
         "JSON RELATIONAL DUALITY VIEW",
         re.compile(
@@ -413,7 +455,7 @@ _DDL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "INDEX",
         re.compile(
-            r"^\s*CREATE(?:\s+UNIQUE)?(?:\s+BITMAP)?\s+INDEX\s+"
+            r"^\s*CREATE(?:\s+UNIQUE)?(?:\s+BITMAP)?(?:\s+MULTIVALUE)?\s+INDEX\s+"
             r"([A-Za-z_][A-Za-z0-9_$#.]*)",
             re.IGNORECASE,
         ),
@@ -459,6 +501,11 @@ def _drop_statement(artifact: _DDLArtifact) -> str:
         return f"DROP TABLE {artifact.name} CASCADE CONSTRAINTS PURGE"
     if artifact.kind == "MATERIALIZED VIEW":
         return f"DROP MATERIALIZED VIEW {artifact.name}"
+    if artifact.kind == "SEARCH INDEX":
+        # Search indexes are dropped with plain ``DROP INDEX``.
+        return f"DROP INDEX {artifact.name}"
+    if artifact.kind == "JSON RELATIONAL DUALITY VIEW":
+        return f"DROP VIEW {artifact.name}"
     return f"DROP {artifact.kind} {artifact.name}"
 
 
