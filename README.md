@@ -2,7 +2,9 @@
 
 Companion validator for the **Oracle SQL/JSON Developer Guide**.
 
-This repository runs every `` ```sql `` example in the guide against a live Oracle AI Database 26ai instance and emits pass / fail reports, JUnit XML for CI, an annotated copy of the article with inline badges, and a deterministic JSON dump for diffing across runs.
+📖 **Read the article on dev.to:** [Oracle SQL/JSON: The Developer's Guide to Querying JSON Like a Pro](https://dev.to/rick_houlihan_cf110dba340/oracle-sqljson-the-developers-guide-to-querying-json-like-a-pro-3hmf)
+
+This repository runs every `` ```sql `` example in that article against a live Oracle AI Database 26ai instance and emits pass / fail reports, JUnit XML for CI, an annotated copy of the article with inline badges, and a deterministic JSON dump for diffing across runs.
 
 It is published as a **companion artifact to the guide itself**: readers who want to verify the examples in their own database, or contributors editing the article, can clone this repo and run `validator run` to see exactly which snippets pass.
 
