@@ -18,19 +18,20 @@ jobs:
 
     services:
       oracle:
-        image: container-registry.oracle.com/database/free:26ai
+        image: gvenzl/oracle-free:23.26.0-slim-faststart
         env:
-          ORACLE_PWD: validator
-          ORACLE_CHARACTERSET: AL32UTF8
+          ORACLE_PASSWORD: oraclepw
+          APP_USER: validator
+          APP_USER_PASSWORD: validator
         ports:
           - 1521:1521
         options: >-
           --shm-size=1g
-          --health-cmd "echo exit | sqlplus -L validator/validator@//localhost:1521/FREEPDB1 | grep -q Connected"
-          --health-interval 30s
+          --health-cmd "echo exit | sqlplus -L system/oraclepw@//localhost:1521/FREEPDB1 | grep -q Connected"
+          --health-interval 15s
           --health-timeout 10s
           --health-retries 20
-          --health-start-period 120s
+          --health-start-period 60s
 
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +44,7 @@ jobs:
       - name: Wait for Oracle healthy
         run: |
           echo "Waiting for Oracle to become healthy..."
-          for i in {1..40}; do
+          for i in {1..60}; do
             status=$(docker inspect --format='{{.State.Health.Status}}' "${{ job.services.oracle.id }}" 2>/dev/null || echo "starting")
             echo "attempt $i: $status"
             if [ "$status" = "healthy" ]; then
@@ -54,6 +55,16 @@ jobs:
           done
           echo "Oracle did not become healthy in time."
           exit 1
+      - name: Grant validator extra privileges
+        # gvenzl auto-creates ``validator`` with CONNECT + RESOURCE via
+        # APP_USER. The integration tests also need view + sequence DDL
+        # plus dictionary read for the FixtureLoader's introspection.
+        run: |
+          docker exec -i "${{ job.services.oracle.id }}" sqlplus -s system/oraclepw@//localhost:1521/FREEPDB1 <<'SQL'
+          GRANT CREATE VIEW, CREATE MATERIALIZED VIEW, CREATE PROCEDURE,
+                CREATE SEQUENCE, SELECT ANY DICTIONARY TO validator;
+          EXIT
+          SQL
       - name: pytest integration
         env:
           ORACLE_HOST: localhost

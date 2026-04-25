@@ -38,19 +38,20 @@ jobs:
 
     services:
       oracle:
-        image: container-registry.oracle.com/database/free:26ai
+        image: gvenzl/oracle-free:23.26.0-slim-faststart
         env:
-          ORACLE_PWD: validator
-          ORACLE_CHARACTERSET: AL32UTF8
+          ORACLE_PASSWORD: oraclepw
+          APP_USER: validator
+          APP_USER_PASSWORD: validator
         ports:
           - 1521:1521
         options: >-
           --shm-size=1g
-          --health-cmd "echo exit | sqlplus -L validator/validator@//localhost:1521/FREEPDB1 | grep -q Connected"
-          --health-interval 30s
+          --health-cmd "echo exit | sqlplus -L system/oraclepw@//localhost:1521/FREEPDB1 | grep -q Connected"
+          --health-interval 15s
           --health-timeout 10s
-          --health-retries 30
-          --health-start-period 180s
+          --health-retries 20
+          --health-start-period 60s
 
     env:
       GUIDE_URL: ${{ github.event.inputs.guide_url || github.event.client_payload.guide_url || 'https://raw.githubusercontent.com/rhoulihan/LinkedIn/master/articles/oracle-sql-json-developer-guide.md' }}
@@ -88,6 +89,20 @@ jobs:
           done
           echo "Oracle did not become healthy in time."
           exit 1
+
+      - name: Grant validator extra privileges
+        # gvenzl auto-creates ``validator`` with CONNECT + RESOURCE via
+        # APP_USER. The dogfood run also needs view/sequence/procedure
+        # DDL plus dictionary read for FixtureLoader introspection. The
+        # ``CREATE SEARCH INDEX`` examples (§11) require Oracle Text,
+        # which the slim image doesn't ship — those snippets fail with
+        # ORA-29833 and are surfaced in the dogfood report.
+        run: |
+          docker exec -i "${{ job.services.oracle.id }}" sqlplus -s system/oraclepw@//localhost:1521/FREEPDB1 <<'SQL'
+          GRANT CREATE VIEW, CREATE MATERIALIZED VIEW, CREATE PROCEDURE,
+                CREATE SEQUENCE, SELECT ANY DICTIONARY TO validator;
+          EXIT
+          SQL
 
       - name: Download guide markdown
         run: |

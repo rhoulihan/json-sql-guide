@@ -1,24 +1,29 @@
 # Oracle AI Database 26ai Free for the validator.
-# Pinned by tag (update digest after validating behavior on each quarterly RU).
+#
+# Uses gvenzl's faststart 23.26 image (boots in ~30s vs 3+ min for the
+# official container-registry.oracle.com/database/free image). Note:
+# the slim image does NOT include Oracle Text, so the §11 search-index
+# examples in the guide fail with ORA-29833. Switch to the official
+# image if you need to validate those.
 services:
   oracle:
-    image: container-registry.oracle.com/database/free:26ai
+    image: gvenzl/oracle-free:23.26.0-slim-faststart
     container_name: json-sql-guide-oracle
     shm_size: 1g
     ports:
       - "1521:1521"
     environment:
-      ORACLE_PWD: validator
-      ORACLE_CHARACTERSET: AL32UTF8
+      ORACLE_PASSWORD: oraclepw
+      APP_USER: validator
+      APP_USER_PASSWORD: validator
     volumes:
       - oracle-data:/opt/oracle/oradata
-      - ./fixture/init:/opt/oracle/scripts/startup:ro
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo exit | sqlplus -L validator/validator@//localhost:1521/FREEPDB1 | grep -q 'Connected'"]
-      interval: 30s
+      test: ["CMD", "bash", "-c", "echo exit | sqlplus -L system/oraclepw@//localhost:1521/FREEPDB1 | grep -q 'Connected'"]
+      interval: 15s
       timeout: 10s
       retries: 20
-      start_period: 120s
+      start_period: 60s
 
 volumes:
   oracle-data:
