@@ -30,7 +30,6 @@ from validator.reporter import (
 )
 from validator.runner import Result
 
-
 # ───────── helpers ─────────
 
 
@@ -90,7 +89,8 @@ def test_cli_report_shows_total_pass_fail_skip_counts() -> None:
     render_cli(_SAMPLE_RESULTS, console)
     out = buf.getvalue()
     # 4 total: 1 pass + 1 fail + 1 skip + 1 expected-error-confirmed (counted as success)
-    assert "Total" in out and "4" in out
+    assert "Total" in out
+    assert "4" in out
     assert "Passed" in out
     assert "Failed" in out
     assert "Skipped" in out
