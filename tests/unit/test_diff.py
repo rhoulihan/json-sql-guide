@@ -15,7 +15,6 @@ from validator.diff import (
 )
 from validator.runner import Result
 
-
 # ───────── helpers ─────────
 
 
