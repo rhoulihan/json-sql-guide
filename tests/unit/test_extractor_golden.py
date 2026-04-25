@@ -41,7 +41,7 @@ def test_extractor_matches_golden_catalog_for_real_guide() -> None:
 
 @pytest.mark.skipif(not GUIDE_PATH.exists(), reason="sibling LinkedIn repo not present")
 def test_real_guide_has_reasonable_block_count() -> None:
-    """Sanity: the guide should have 50–100 SQL blocks. Drift outside
+    """Sanity: the guide should have 50-100 SQL blocks. Drift outside
     this range probably means an extractor bug rather than an edit."""
     snippets = extract_file(GUIDE_PATH)
     assert 50 <= len(snippets) <= 100
